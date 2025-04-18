@@ -1,0 +1,4 @@
+The tool execution failed with the following error:
+<error>
+${ERROR}
+</error>
