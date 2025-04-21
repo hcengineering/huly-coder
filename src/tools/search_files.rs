@@ -1,27 +1,25 @@
-use std::collections::HashMap;
-use std::io::Cursor;
+use std::io::{Cursor, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use grep_printer::StandardBuilder;
 use grep_regex::RegexMatcher;
 use grep_searcher::{BinaryDetection, SearcherBuilder};
-use indoc::{formatdoc, indoc};
+use indoc::formatdoc;
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use walkdir::WalkDir;
 
-use super::ClineTool;
-
-#[derive(Debug, thiserror::Error)]
-pub enum SearchFilesError {
-    #[error("Search file error: {0}")]
-    SearchError(#[from] std::io::Error),
-    #[error("Incorrect parameters error: {0}")]
-    ParametersError(String),
-}
-
 pub struct SearchFilesTool {
     pub workspace_dir: PathBuf,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchFilesToolArgs {
+    pub path: String,
+    pub regex: String,
+    pub file_pattern: Option<String>,
 }
 
 impl SearchFilesTool {
@@ -32,10 +30,12 @@ impl SearchFilesTool {
     }
 }
 
-impl ClineTool for SearchFilesTool {
+impl Tool for SearchFilesTool {
     const NAME: &'static str = "search_files";
 
-    type Error = SearchFilesError;
+    type Error = std::io::Error;
+    type Args = SearchFilesToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -66,56 +66,39 @@ impl ClineTool for SearchFilesTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
-        if let Some(path) = args.get("path") {
-            if let Some(regex) = args.get("regex") {
-                //                let regex = Regex::new(regex_str).map_err(|e| {
-                //                    SearchFilesError::ParametersError(format!("invalid regex: {}", e))
-                //                })?;
-                let path = if Path::new(path).is_absolute() {
-                    Path::new(path).to_path_buf()
-                } else {
-                    self.workspace_dir.join(path)
-                };
-                let matcher = RegexMatcher::new_line_matcher(regex).map_err(|e| {
-                    SearchFilesError::ParametersError(format!("invalid regex: {}", e))
-                })?;
-                tracing::info!("Search for path '{}' and regex {}", path.display(), regex);
-                let mut searcher = SearcherBuilder::new()
-                    .binary_detection(BinaryDetection::quit(b'\x00'))
-                    .build();
-
-                let mut buffer = Vec::new();
-                let writer = Cursor::new(&mut buffer);
-                let mut printer = StandardBuilder::new().build_no_color(writer);
-
-                for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
-                    if !entry.file_type().is_file() {
-                        continue;
-                    }
-                    let _ = searcher.search_path(
-                        &matcher,
-                        entry.path(),
-                        printer.sink_with_path(&matcher, entry.path()),
-                    );
-                }
-                Ok(String::from_utf8(buffer).unwrap())
-            } else {
-                Err(SearchFilesError::ParametersError("regex".to_string()))
-            }
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        let path = if Path::new(&args.path).is_absolute() {
+            Path::new(&args.path).to_path_buf()
         } else {
-            Err(SearchFilesError::ParametersError("path".to_string()))
-        }
-    }
+            self.workspace_dir.join(args.path)
+        };
+        let matcher = RegexMatcher::new_line_matcher(&args.regex).map_err(|e| {
+            std::io::Error::new(ErrorKind::InvalidInput, format!("invalid regex: {}", e))
+        })?;
+        tracing::info!(
+            "Search for path '{}' and regex {}",
+            path.display(),
+            args.regex
+        );
+        let mut searcher = SearcherBuilder::new()
+            .binary_detection(BinaryDetection::quit(b'\x00'))
+            .build();
 
-    fn usage(&self) -> &str {
-        indoc! {"
-            <search_files>
-            <path>Directory path here</path>
-            <regex>Your regex pattern here</regex>
-            <file_pattern>file pattern here (optional)</file_pattern>
-            </search_files>
-        "}
+        let mut buffer = Vec::new();
+        let writer = Cursor::new(&mut buffer);
+        let mut printer = StandardBuilder::new().build_no_color(writer);
+
+        for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let _ = searcher.search_path(
+                &matcher,
+                entry.path(),
+                printer.sink_with_path(&matcher, entry.path()),
+            );
+        }
+        Ok(String::from_utf8(buffer).unwrap())
     }
 }
 
@@ -127,10 +110,11 @@ mod tests {
     async fn test_search_files() {
         let tool = SearchFilesTool::new(".");
         let res = tool
-            .call(&HashMap::from([
-                ("path".to_string(), "src".to_string()),
-                ("regex".to_string(), ".*Tool.*".to_string()),
-            ]))
+            .call(SearchFilesToolArgs {
+                path: "src".to_string(),
+                regex: ".*Tool.*".to_string(),
+                file_pattern: None,
+            })
             .await
             .ok()
             .unwrap();

@@ -2,22 +2,24 @@ use std::collections::HashMap;
 
 use indoc::{formatdoc, indoc};
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::ClineTool;
-
-#[derive(Debug, thiserror::Error)]
-pub enum AskFollowupQuestionError {
-    #[error("Incorrect parameters error: {0}")]
-    ParametersError(String),
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AskFollowupQuestionToolArgs {
+    pub question: String,
+    pub options: String,
 }
 
 pub struct AskFollowupQuestionTool;
 
-impl ClineTool for AskFollowupQuestionTool {
+impl Tool for AskFollowupQuestionTool {
     const NAME: &'static str = "ask_followup_question";
 
-    type Error = AskFollowupQuestionError;
+    type Error = std::io::Error;
+    type Args = AskFollowupQuestionToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -35,7 +37,10 @@ impl ClineTool for AskFollowupQuestionTool {
                         "description": "The question to ask the user. This should be a clear, specific question that addresses the information you need.",
                     },
                     "options": {
-                        "type": "string",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
                         "description": indoc! {"\
                             An array of 2-5 options for the user to choose from. Each option should be a string describing \
                             a possible answer. You may not always need to provide options, but it may be helpful in many \
@@ -50,24 +55,7 @@ impl ClineTool for AskFollowupQuestionTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
-        if let Some(_question) = args.get("question") {
-            Ok("".to_string())
-        } else {
-            Err(AskFollowupQuestionError::ParametersError(
-                "question".to_string(),
-            ))
-        }
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {r#"
-            <ask_followup_question>
-            <question>Your question here</question>
-            <options>
-            Array of options here (optional), e.g. ["Option 1", "Option 2", "Option 3"]
-            </options>
-            </ask_followup_question>
-        "#}
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        Ok("".to_string())
     }
 }

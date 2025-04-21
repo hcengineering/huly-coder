@@ -1,15 +1,16 @@
 use std::collections::HashMap;
-use std::env;
 use std::error::Error;
+use std::{env, fs};
 
+use futures_util::StreamExt;
 use indoc::indoc;
-use rig::completion::Completion;
-use rig::message::{AssistantContent, Message, UserContent};
-use rig::providers::openrouter;
+use rig::message::{AssistantContent, Message, ToolResultContent, UserContent};
+use rig::streaming::StreamingCompletion;
+use rig::tool::Tool;
+use rig::OneOrMany;
 use walkdir::DirEntry;
 
-use self::templates::TOOL_CALL_ERROR;
-use self::templates::TOOL_USAGE_ERROR;
+use self::providers::openrouter;
 use self::templates::{ENV_DETAILS, SYSTEM_PROMPT};
 use self::tools::access_mcp_resource::AccessMcpResourceTool;
 use self::tools::ask_followup_question::AskFollowupQuestionTool;
@@ -22,11 +23,11 @@ use self::tools::replace_in_file::ReplaceInFileTool;
 use self::tools::search_files::SearchFilesTool;
 use self::tools::use_mcp_tool::UseMcpTool;
 use self::tools::write_to_file::WriteToFileTool;
-use self::tools::ClineTool;
-use self::tools::ClineToolDyn;
-use self::tools::ToolCallIterator;
+mod providers;
 mod templates;
 mod tools;
+
+const MAX_FILES: usize = 200;
 
 fn get_shell_path() -> String {
     if let Ok(shell) = std::env::var("SHELL") {
@@ -38,49 +39,11 @@ fn get_shell_path() -> String {
     }
 }
 
-async fn prepare_system_prompt(
-    workspace_dir: &str,
-    tools: &HashMap<String, Box<dyn ClineToolDyn>>,
-    user_instructions: &str,
-) -> String {
-    let mut tools_str = String::new();
-    for tool in tools.values() {
-        let definition = tool.definition("".to_string()).await;
-        let mut tool_parameters = String::new();
-        let parameters = definition.parameters.as_object().unwrap();
-        for (name, param) in parameters.get("properties").unwrap().as_object().unwrap() {
-            let required_prefix = if parameters["required"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|v| v.as_str().unwrap() == name)
-            {
-                "required"
-            } else {
-                "optional"
-            };
-            tool_parameters = format!(
-                "{}\n- {}: ({}) {}",
-                tool_parameters,
-                name,
-                required_prefix,
-                param["description"].as_str().unwrap()
-            );
-        }
-        tools_str = format!(
-            "## {}\nDescription: {}\nParameters:{}\nUsage:\n{}\n\n",
-            tool.name(),
-            definition.description,
-            tool_parameters,
-            tool.usage()
-        );
-    }
-
+async fn prepare_system_prompt(workspace_dir: &str, user_instructions: &str) -> String {
     subst::substitute(
         SYSTEM_PROMPT,
         &HashMap::from([
             ("WORKSPACE_DIR", workspace_dir),
-            ("TOOLS", &tools_str),
             ("OS_NAME", std::env::consts::OS),
             ("OS_SHELL_EXECUTABLE", &get_shell_path()),
             ("USER_HOME_DIR", "."),
@@ -104,7 +67,7 @@ fn is_ignored(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
-fn prepare_env_message(workspace_dir: &str) -> Message {
+fn add_env_message<'a>(msg: &'a mut Message, workspace_dir: &'a str) {
     let mut files: Vec<String> = Vec::default();
 
     for entry in walkdir::WalkDir::new(workspace_dir)
@@ -113,6 +76,7 @@ fn prepare_env_message(workspace_dir: &str) -> Message {
         .into_iter()
         .filter_entry(|e| !is_ignored(e))
         .filter_map(|e| e.ok())
+        .take(MAX_FILES)
     {
         files.push(
             entry
@@ -131,214 +95,182 @@ fn prepare_env_message(workspace_dir: &str) -> Message {
     } else {
         &files_str
     };
-    Message::user(
-        subst::substitute(
-            ENV_DETAILS,
-            &HashMap::from([
-                ("TIME", chrono::Local::now().to_rfc2822().as_str()),
-                ("WORKING_DIR", workspace_dir),
-                ("FILES", files),
-            ]),
-        )
-        .unwrap(),
+    if let Message::User { content } = msg {
+        content.push(UserContent::text(
+            subst::substitute(
+                ENV_DETAILS,
+                &HashMap::from([
+                    ("TIME", chrono::Local::now().to_rfc2822().as_str()),
+                    ("WORKING_DIR", workspace_dir),
+                    ("FILES", files),
+                ]),
+            )
+            .unwrap(),
+        ));
+    }
+}
+
+fn log_last_message(messages: &Vec<Message>) {
+    let Some(last_message) = messages.last() else {
+        return;
+    };
+    match last_message {
+        Message::User { content } => {
+            println!("==== User ====");
+            for content in content.iter() {
+                match content {
+                    UserContent::ToolResult(tool_result) => {
+                        println!("Tool result: {}", tool_result.id);
+                    }
+                    UserContent::Text(text) => {
+                        println!(
+                            "Text: {}",
+                            text.text.chars().into_iter().take(100).collect::<String>()
+                        );
+                    }
+                    UserContent::Audio(audio) => {
+                        println!("Audio: {:?}", audio.media_type);
+                    }
+                    UserContent::Document(doc) => {
+                        println!("Document: {:?}", doc.media_type);
+                    }
+                    UserContent::Image(img) => {
+                        println!("Image: {:?}", img.media_type);
+                    }
+                }
+            }
+        }
+        Message::Assistant { content } => {
+            println!("==== Assistant ====");
+            for content in content.iter() {
+                match content {
+                    AssistantContent::ToolCall(tool_call) => {
+                        println!("Tool call: {}", tool_call.function.name);
+                    }
+                    AssistantContent::Text(text) => {
+                        println!(
+                            "Text: {}",
+                            text.text.chars().into_iter().take(100).collect::<String>()
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn persist_history(messages: &Vec<Message>) {
+    fs::write(
+        "history.json",
+        serde_json::to_string_pretty(messages).unwrap(),
     )
+    .unwrap();
+}
+
+fn load_history() -> Vec<Message> {
+    let history = fs::read_to_string("history.json").unwrap();
+    serde_json::from_str(&history).unwrap()
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
+        .with_max_level(tracing::Level::INFO)
         .with_target(false)
         .init();
     let api_key = env::var("OPEN_ROUTER_API_KEY").expect("Env key 'OPEN_ROUTER_API_KEY' not found");
-    let workspace_dir = env::var("WORKSPACE_DIR").expect("Env key 'WORKSPACE_DIR' not found");
+    //let workspace_dir = env::var("WORKSPACE_DIR").expect("Env key 'WORKSPACE_DIR' not found");
+    let workspace_dir = "D:\\work\\test4".to_string();
 
     let user_instructions = indoc! {"
         You are dedicated software engineer working alone. You’re free to choose any technology, \
         approach, and solution. If in doubt please choose the best way you think. \
         Your goal is to build working software based on user request."
     };
-    let mut tools = HashMap::<String, Box<dyn ClineToolDyn>>::new();
-    tools.insert(
-        ExecuteCommandTool::NAME.to_string(),
-        Box::new(ExecuteCommandTool::new(&workspace_dir)),
-    );
-    tools.insert(
-        ReadFileTool::NAME.to_string(),
-        Box::new(ReadFileTool::new(&workspace_dir)),
-    );
-    tools.insert(
-        WriteToFileTool::NAME.to_string(),
-        Box::new(WriteToFileTool::new(&workspace_dir)),
-    );
-    tools.insert(
-        ReplaceInFileTool::NAME.to_string(),
-        Box::new(ReplaceInFileTool::new(&workspace_dir)),
-    );
-    tools.insert(
-        AccessMcpResourceTool::NAME.to_string(),
-        Box::new(AccessMcpResourceTool),
-    );
-    tools.insert(
-        AskFollowupQuestionTool::NAME.to_string(),
-        Box::new(AskFollowupQuestionTool),
-    );
-    tools.insert(
-        AttemptCompletionTool::NAME.to_string(),
-        Box::new(AttemptCompletionTool),
-    );
-    tools.insert(
-        ListCodeDefinitionNamesTool::NAME.to_string(),
-        Box::new(ListCodeDefinitionNamesTool::new(&workspace_dir)),
-    );
-    tools.insert(
-        ListFilesTool::NAME.to_string(),
-        Box::new(ListFilesTool::new(&workspace_dir)),
-    );
-    tools.insert(
-        SearchFilesTool::NAME.to_string(),
-        Box::new(SearchFilesTool::new(&workspace_dir)),
-    );
-    tools.insert(UseMcpTool::NAME.to_string(), Box::new(UseMcpTool));
 
     let client = openrouter::Client::new(&api_key);
     let mut messages: Vec<Message> = Vec::default();
-    let system_prompt = prepare_system_prompt(&workspace_dir, &tools, user_instructions).await;
+    let system_prompt = prepare_system_prompt(&workspace_dir, user_instructions).await;
     let agent = client
         //.agent("qwen/qwen2.5-vl-32b-instruct:free")
         .agent("anthropic/claude-3.5-sonnet")
         .preamble(&system_prompt)
+        .tool(ReadFileTool::new(&workspace_dir))
+        .tool(ListFilesTool::new(&workspace_dir))
+        .tool(WriteToFileTool::new(&workspace_dir))
+        .tool(ExecuteCommandTool::new(&workspace_dir))
+        .tool(ListCodeDefinitionNamesTool::new(&workspace_dir))
+        .tool(ReplaceInFileTool::new(&workspace_dir))
+        .tool(SearchFilesTool::new(&workspace_dir))
+        .tool(AccessMcpResourceTool)
+        .tool(UseMcpTool)
+        .tool(AskFollowupQuestionTool)
+        .tool(AttemptCompletionTool)
         .temperature(0.0)
         .build();
     let mut count = 0;
-    messages.push(Message::user("create Sokoban game"));
+    log_last_message(&messages);
     let mut has_completion = false;
-    while count < 10 && !has_completion {
+    let mut message = Message::user("add npm and build the project");
+    while count < 5 && !has_completion {
         count += 1;
-        let response = agent
-            .completion(
-                prepare_env_message(&workspace_dir), // last message always is env
-                messages.clone(),
-            )
+        add_env_message(&mut message, &workspace_dir);
+        let mut stream = agent
+            .stream_completion(message.clone(), messages.clone())
             .await?
-            .send()
+            .stream()
             .await?;
-        for content in response.choice {
-            let str_content = match content {
-                AssistantContent::Text(text) => text.text.clone(),
-                _ => "".to_string(),
-            };
-            messages.push(Message::assistant(&str_content));
-            messages.append(&mut process_tools(&str_content, &tools).await);
-            if str_content.contains("<attempt_completion>") {
-                has_completion = true;
-            }
-        }
-    }
-    for message in messages.iter() {
-        match message {
-            Message::User { content } => {
-                println!("==== User ====");
-                for content in content.iter() {
-                    if let UserContent::Text(text) = content {
-                        println!("{}", text.text);
-                    }
+        messages.push(message.clone());
+        let mut assistant_content = String::new();
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(AssistantContent::Text(text)) => {
+                    assistant_content.push_str(&text.text);
+                    std::io::Write::flush(&mut std::io::stdout())?;
                 }
-            }
-            Message::Assistant { content } => {
-                println!("==== Assistant ====");
-                for content in content.iter() {
-                    if let AssistantContent::Text(text) = content {
-                        println!("{}", text.text);
+                Ok(AssistantContent::ToolCall(tool_call)) => {
+                    if !assistant_content.is_empty() {
+                        messages.push(Message::assistant(&assistant_content));
+                        assistant_content.clear();
+                        log_last_message(&messages);
                     }
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-async fn process_tools(text: &str, tools: &HashMap<String, Box<dyn ClineToolDyn>>) -> Vec<Message> {
-    let mut messages: Vec<Message> = Vec::default();
-    let mut tool_used = false;
-    let tool_call_iterator = ToolCallIterator::new(text, tools.keys().cloned().collect());
-    for (tool_name, params) in tool_call_iterator {
-        if tool_used {
-            messages.push(Message::user(
-                subst::substitute(
-                    TOOL_USAGE_ERROR,
-                    &HashMap::from([("TOOL_NAME", &tool_name)]),
-                )
-                .unwrap(),
-            ));
-        } else if let Some(tool) = tools.get(&tool_name) {
-            tool_used = true;
-            // TODO: get from tool
-            let main_arg = params
-                .get("path")
-                .or(params.get("command"))
-                .or(params.get("server_name"))
-                .unwrap();
-            messages.push(Message::user(format!(
-                "[{tool_name} for '{main_arg}'] Result:"
-            )));
-            match tool.call(params).await {
-                Ok(result) => {
-                    messages.push(Message::user(result));
+                    messages.push(Message::Assistant {
+                        content: OneOrMany::one(AssistantContent::ToolCall(tool_call.clone())),
+                    });
+                    log_last_message(&messages);
+                    let res = agent
+                        .tools
+                        .call(
+                            &tool_call.function.name,
+                            tool_call.function.arguments.to_string(),
+                        )
+                        .await
+                        .map_err(|e| std::io::Error::other(e.to_string()))?;
+                    message = Message::User {
+                        content: OneOrMany::one(UserContent::tool_result(
+                            tool_call.id,
+                            OneOrMany::one(ToolResultContent::text(res)),
+                        )),
+                    };
+                    add_env_message(&mut message, &workspace_dir);
+                    log_last_message(&messages);
+                    if tool_call.function.name == AttemptCompletionTool::NAME {
+                        has_completion = true;
+                    }
                 }
                 Err(e) => {
-                    messages.push(Message::user(
-                        subst::substitute(
-                            TOOL_CALL_ERROR,
-                            &HashMap::from([("ERROR", &format!("{e}"))]),
-                        )
-                        .unwrap(),
-                    ));
+                    eprintln!("Error: {}", e);
+                    break;
                 }
             }
         }
-    }
-    messages
-}
+        if !assistant_content.is_empty() {
+            messages.push(Message::assistant(&assistant_content));
+            log_last_message(&messages);
+        }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_read_file() {
-        let txt = "some test message:\n\n<thinking>\n1. some think block.\n</thinking>\n\n<read_file>\n<path>cline-agent.d</path>\n\n</read_file>\n<thinking>\nanother think block.\n</thinking>";
-        let mut tools = HashMap::<String, Box<dyn ClineToolDyn>>::new();
-        tools.insert(
-            ReadFileTool::NAME.to_string(),
-            Box::new(ReadFileTool::new("./target/debug")),
-        );
-        let messages = process_tools(txt, &tools).await;
-        assert_eq!(messages.len(), 2);
-        assert_eq!(
-            messages[0],
-            Message::user("[read_file for 'cline-agent.d'] Result:")
-        );
+        persist_history(&messages);
     }
-
-    #[tokio::test]
-    async fn test_two_tools_error() {
-        let txt = "some test message:\n\n<thinking>\n1. some think block.\n</thinking>\n\n<read_file>\n<path>cline-agent.d</path>\n\n</read_file>\n\n<read_file>\n<path>cline-agent.d</path>\n\n</read_file>\n<thinking>\nanother think block.\n</thinking>";
-        let mut tools = HashMap::<String, Box<dyn ClineToolDyn>>::new();
-        tools.insert(
-            ReadFileTool::NAME.to_string(),
-            Box::new(ReadFileTool::new("./target/debug")),
-        );
-        let messages = process_tools(txt, &tools).await;
-        assert_eq!(messages.len(), 3);
-        assert_eq!(
-            messages[0],
-            Message::user("[read_file for 'cline-agent.d'] Result:")
-        );
-        assert_eq!(
-            messages[2],
-            Message::user("Tool [read_file] was not executed because a tool has already been used in this message. Only one tool may be used per message. You must assess the first tool's result before proceeding to use the next tool.")
-        );
-    }
+    Ok(())
 }

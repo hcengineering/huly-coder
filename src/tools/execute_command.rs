@@ -1,12 +1,11 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use indoc::{formatdoc, indoc};
+use indoc::formatdoc;
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-
-use super::ClineTool;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecuteCommandError {
@@ -14,6 +13,12 @@ pub enum ExecuteCommandError {
     ExecuteError(#[from] std::io::Error),
     #[error("Incorrect parameters error: {0}")]
     ParametersError(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecuteCommandToolArgs {
+    pub command: String,
+    pub requires_approval: bool,
 }
 
 pub struct ExecuteCommandTool {
@@ -28,10 +33,12 @@ impl ExecuteCommandTool {
     }
 }
 
-impl ClineTool for ExecuteCommandTool {
+impl Tool for ExecuteCommandTool {
     const NAME: &'static str = "execute_command";
 
     type Error = ExecuteCommandError;
+    type Args = ExecuteCommandToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -53,7 +60,7 @@ impl ClineTool for ExecuteCommandTool {
                                         Ensure the command is properly formatted and does not contain any harmful instructions.",
                     },
                     "requires_approval": {
-                        "type": "string",
+                        "type": "boolean",
                         "description": "A boolean indicating whether this command requires explicit user approval before \
                                         execution in case the user has auto-approve mode enabled. Set to 'true' for potentially \
                                         impactful operations like installing/uninstalling packages, deleting/overwriting files, \
@@ -68,45 +75,28 @@ impl ClineTool for ExecuteCommandTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
-        if let Some(command) = args.get("command") {
-            let _requires_approval = args
-                .get("requires_approval")
-                .unwrap_or(&"false".to_string())
-                == "true";
-            tracing::info!("Executing command '{}'", command);
-            let mut cmd = if cfg!(target_os = "windows") {
-                Command::new("cmd")
-            } else {
-                Command::new("bash")
-            };
-            cmd.current_dir(self.workspace_dir.clone())
-                .arg(if cfg!(target_os = "windows") {
-                    "/C"
-                } else {
-                    "-c"
-                })
-                .arg(command)
-                .output()
-                .map(|output| {
-                    if output.status.success() {
-                        String::from_utf8(output.stdout).unwrap_or_else(|_| "".to_string())
-                    } else {
-                        String::from_utf8(output.stderr).unwrap_or_else(|_| "".to_string())
-                    }
-                })
-                .map_err(ExecuteCommandError::ExecuteError)
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        tracing::info!("Executing command '{}'", args.command);
+        let mut cmd = if cfg!(target_os = "windows") {
+            Command::new("cmd")
         } else {
-            Err(ExecuteCommandError::ParametersError("command".to_string()))
-        }
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {"
-            <execute_command>
-            <command>Your command here</command>
-            <requires_approval>true or false</requires_approval>
-            </execute_command>
-        "}
+            Command::new("bash")
+        };
+        cmd.current_dir(self.workspace_dir.clone())
+            .arg(if cfg!(target_os = "windows") {
+                "/C"
+            } else {
+                "-c"
+            })
+            .arg(args.command)
+            .output()
+            .map(|output| {
+                if output.status.success() {
+                    String::from_utf8(output.stdout).unwrap_or_else(|_| "".to_string())
+                } else {
+                    String::from_utf8(output.stderr).unwrap_or_else(|_| "".to_string())
+                }
+            })
+            .map_err(ExecuteCommandError::ExecuteError)
     }
 }

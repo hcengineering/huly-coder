@@ -1,25 +1,23 @@
-use std::collections::HashMap;
-
-use indoc::{formatdoc, indoc};
+use indoc::formatdoc;
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::ClineTool;
-
-#[derive(Debug, thiserror::Error)]
-pub enum AccessMcpResourceError {
-    #[error("Access MCP Resource error: {0}")]
-    AccessError(#[from] std::io::Error),
-    #[error("Incorrect parameters error: {0}")]
-    ParametersError(String),
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccessMcpResourceToolArgs {
+    pub server_name: String,
+    pub uri: String,
 }
 
 pub struct AccessMcpResourceTool;
 
-impl ClineTool for AccessMcpResourceTool {
+impl Tool for AccessMcpResourceTool {
     const NAME: &'static str = "access_mcp_resource";
 
-    type Error = AccessMcpResourceError;
+    type Error = std::io::Error;
+    type Args = AccessMcpResourceToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -45,23 +43,8 @@ impl ClineTool for AccessMcpResourceTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
+    async fn call(&self, _args: Self::Args) -> Result<Self::Output, Self::Error> {
         // TODO: implement this
-        if let Some(_server_name) = args.get("server_name") {
-            Ok("".to_string())
-        } else {
-            Err(AccessMcpResourceError::ParametersError(
-                "server_name".to_string(),
-            ))
-        }
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {"
-            <access_mcp_resource>
-            <server_name>server name here</server_name>
-            <uri>resource URI here</uri>
-            </access_mcp_resource>
-        "}
+        Ok("".to_string())
     }
 }

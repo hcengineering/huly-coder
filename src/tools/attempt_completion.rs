@@ -1,20 +1,26 @@
-use std::collections::HashMap;
-
-use indoc::{formatdoc, indoc};
+use indoc::formatdoc;
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-
-use super::ClineTool;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AttemptCompletionError {}
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AttemptCompletionArgs {
+    pub result: String,
+    pub command: Option<String>,
+}
+
 pub struct AttemptCompletionTool;
 
-impl ClineTool for AttemptCompletionTool {
+impl Tool for AttemptCompletionTool {
     const NAME: &'static str = "attempt_completion";
 
     type Error = AttemptCompletionError;
+    type Args = AttemptCompletionArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -51,18 +57,7 @@ impl ClineTool for AttemptCompletionTool {
         }
     }
 
-    async fn call(&self, _args: &HashMap<String, String>) -> Result<String, Self::Error> {
+    async fn call(&self, _args: Self::Args) -> Result<Self::Output, Self::Error> {
         Ok("".to_string())
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {"
-            <attempt_completion>
-            <result>
-            Your final result description here
-            </result>
-            <command>Command to demonstrate result (optional)</command>
-            </attempt_completion>
-        "}
     }
 }

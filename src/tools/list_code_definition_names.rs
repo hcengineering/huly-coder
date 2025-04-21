@@ -1,16 +1,20 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use indoc::{formatdoc, indoc};
+use indoc::formatdoc;
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-
-use super::ClineTool;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ListCodeDefinitionNamesError {
     #[error("Incorrect parameters error: {0}")]
     ParametersError(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListCodeDefinitionNamesToolArgs {
+    pub path: String,
 }
 
 pub struct ListCodeDefinitionNamesTool {
@@ -25,10 +29,12 @@ impl ListCodeDefinitionNamesTool {
     }
 }
 
-impl ClineTool for ListCodeDefinitionNamesTool {
+impl Tool for ListCodeDefinitionNamesTool {
     const NAME: &'static str = "list_code_definition_names";
 
     type Error = ListCodeDefinitionNamesError;
+    type Args = ListCodeDefinitionNamesToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -52,22 +58,7 @@ impl ClineTool for ListCodeDefinitionNamesTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
-        if let Some(_path) = args.get("path") {
-            // TODO: implement this use LSP or tree-sitter parser
-            Ok("".to_string())
-        } else {
-            Err(ListCodeDefinitionNamesError::ParametersError(
-                "path".to_string(),
-            ))
-        }
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {"
-            <list_code_definition_names>
-            <path>Directory path here</path>
-            </list_code_definition_names>
-        "}
+    async fn call(&self, _args: Self::Args) -> Result<Self::Output, Self::Error> {
+        Ok("".to_string())
     }
 }

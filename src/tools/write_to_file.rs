@@ -1,20 +1,17 @@
-use indoc::{formatdoc, indoc};
+use indoc::formatdoc;
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::tools::create_patch;
 
-use super::ClineTool;
-
-#[derive(Debug, thiserror::Error)]
-pub enum WriteToFileError {
-    #[error("Write file error: {0}")]
-    WriteError(#[from] std::io::Error),
-    #[error("Incorrect parameters error: {0}")]
-    ParametersError(String),
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WriteToFileToolArgs {
+    pub path: String,
+    pub content: String,
 }
 
 pub struct WriteToFileTool {
@@ -29,10 +26,12 @@ impl WriteToFileTool {
     }
 }
 
-impl ClineTool for WriteToFileTool {
+impl Tool for WriteToFileTool {
     const NAME: &'static str = "write_to_file";
 
-    type Error = WriteToFileError;
+    type Error = std::io::Error;
+    type Args = WriteToFileToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -62,38 +61,19 @@ impl ClineTool for WriteToFileTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
-        if let Some(path) = args.get("path") {
-            if let Some(content) = args.get("content") {
-                let path = if Path::new(path).is_absolute() {
-                    Path::new(path).to_path_buf()
-                } else {
-                    self.workspace_dir.join(path)
-                };
-                tracing::info!("Write to file '{}'", path.display());
-                let diff = create_patch("", content);
-                fs::create_dir_all(path.parent().unwrap()).map_err(WriteToFileError::WriteError)?;
-                fs::write(path, content).map_err(WriteToFileError::WriteError)?;
-                Ok(format!(
-                    "The user made the following updates to your content:\n\n{}",
-                    diff
-                ))
-            } else {
-                Err(WriteToFileError::ParametersError("content".to_string()))
-            }
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        let path = if Path::new(&args.path).is_absolute() {
+            Path::new(&args.path).to_path_buf()
         } else {
-            Err(WriteToFileError::ParametersError("path".to_string()))
-        }
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {"
-            <write_to_file>
-            <path>File path here</path>
-            <content>
-            Your file content here
-            </content>
-            </write_to_file>
-        "}
+            self.workspace_dir.join(args.path)
+        };
+        tracing::info!("Write to file '{}'", path.display());
+        let diff = create_patch("", &args.content);
+        fs::create_dir_all(path.parent().unwrap())?;
+        fs::write(path, args.content)?;
+        Ok(format!(
+            "The user made the following updates to your content:\n\n{}",
+            diff
+        ))
     }
 }

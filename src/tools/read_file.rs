@@ -1,19 +1,15 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use indoc::indoc;
+use indoc::formatdoc;
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::ClineTool;
-
-#[derive(Debug, thiserror::Error)]
-pub enum ReadFileError {
-    #[error("Read file error: {0}")]
-    ReadError(#[from] std::io::Error),
-    #[error("Incorrect parameters error: {0}")]
-    ParametersError(String),
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadFileToolArgs {
+    pub path: String,
 }
 
 pub struct ReadFileTool {
@@ -28,15 +24,17 @@ impl ReadFileTool {
     }
 }
 
-impl ClineTool for ReadFileTool {
+impl Tool for ReadFileTool {
     const NAME: &'static str = "read_file";
 
-    type Error = ReadFileError;
+    type Error = std::io::Error;
+    type Args = ReadFileToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: self.name(),
-            description: indoc! {"\
+            description: formatdoc! {"\
                 Request to read the contents of a file at the specified path. Use this when you need to examine the contents \
                 of an existing file you do not know the contents of, for example to analyze code, review text files, \
                 or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. \
@@ -55,25 +53,13 @@ impl ClineTool for ReadFileTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
-        if let Some(path) = args.get("path") {
-            let path = if Path::new(path).is_absolute() {
-                Path::new(path).to_path_buf()
-            } else {
-                self.workspace_dir.join(path)
-            };
-            tracing::info!("Reading file {}", path.display());
-            fs::read_to_string(path).map_err(ReadFileError::ReadError)
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        let path = if Path::new(&args.path).is_absolute() {
+            Path::new(&args.path).to_path_buf()
         } else {
-            Err(ReadFileError::ParametersError("path".to_string()))
-        }
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {"
-            <read_file>
-            <path>File path here</path>
-            </read_file>
-        "}
+            self.workspace_dir.join(&args.path)
+        };
+        tracing::info!("Reading file {}", path.display());
+        fs::read_to_string(path)
     }
 }

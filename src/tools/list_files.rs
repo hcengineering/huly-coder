@@ -1,18 +1,15 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use indoc::{formatdoc, indoc};
+use indoc::formatdoc;
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::ClineTool;
-
-#[derive(Debug, thiserror::Error)]
-pub enum ListFilesError {
-    #[error("List files error: {0}")]
-    ListError(#[from] std::io::Error),
-    #[error("Incorrect parameters error: {0}")]
-    ParametersError(String),
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListFilesToolArgs {
+    pub path: String,
+    pub recursive: Option<bool>,
 }
 
 pub struct ListFilesTool {
@@ -27,10 +24,12 @@ impl ListFilesTool {
     }
 }
 
-impl ClineTool for ListFilesTool {
+impl Tool for ListFilesTool {
     const NAME: &'static str = "list_files";
 
-    type Error = ListFilesError;
+    type Error = std::io::Error;
+    type Args = ListFilesToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -49,7 +48,7 @@ impl ClineTool for ListFilesTool {
                                                    working directory {})", self.workspace_dir.as_path().to_str().unwrap()},
                     },
                     "recursive": {
-                        "type": "string",
+                        "type": "boolean",
                         "description": "Whether to list files recursively. Use true for recursive listing, false or omit for top-level only."
                     }
                 },
@@ -59,44 +58,33 @@ impl ClineTool for ListFilesTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
-        if let Some(path) = args.get("path") {
-            let path = if Path::new(path).is_absolute() {
-                Path::new(path).to_path_buf()
-            } else {
-                self.workspace_dir.join(path)
-            };
-            let recursive = args.get("recursive").unwrap_or(&"false".to_string()) == "true";
-
-            tracing::info!("List files in '{}'", path.display());
-            let mut files: Vec<String> = Vec::default();
-            for entry in walkdir::WalkDir::new(path.clone())
-                .max_depth(if recursive { usize::MAX } else { 1 })
-                .follow_links(false)
-                .same_file_system(true)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                files.push(entry
-                        .path()
-                        .strip_prefix(&path)
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .replace("\\", "/").to_string());
-            }
-            Ok(files.join("\n"))
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        let path = if Path::new(&args.path).is_absolute() {
+            Path::new(&args.path).to_path_buf()
         } else {
-            Err(ListFilesError::ParametersError("path".to_string()))
+            self.workspace_dir.join(args.path)
+        };
+        let recursive = args.recursive.unwrap_or(false);
+        tracing::info!("List files in '{}'", path.display());
+        let mut files: Vec<String> = Vec::default();
+        for entry in walkdir::WalkDir::new(path.clone())
+            .max_depth(if recursive { usize::MAX } else { 1 })
+            .follow_links(false)
+            .same_file_system(true)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            files.push(
+                entry
+                    .path()
+                    .strip_prefix(&path)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .replace("\\", "/")
+                    .to_string(),
+            );
         }
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {"
-            <list_files>
-            <path>Directory path here</path>
-            <recursive>true or false (optional)</recursive>
-            </list_files>
-        "}
+        Ok(files.join("\n"))
     }
 }

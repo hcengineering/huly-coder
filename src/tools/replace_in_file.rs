@@ -1,23 +1,29 @@
-use std::collections::HashMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use indoc::{formatdoc, indoc};
 use rig::completion::ToolDefinition;
+use rig::tool::Tool;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::tools::create_patch;
 
-use super::ClineTool;
+//#[derive(Debug, thiserror::Error)]
+//pub enum ReplaceInFileError {
+//    #[error("Replace in file error: {0}")]
+//    ReplaceError(#[from] std::io::Error),
+//    #[error("Incorrect parameters error: {0}")]
+//    ParametersError(String),
+//    #[error("Search string not found: {0}")]
+//    SearchNotFound(String),
+//}
 
-#[derive(Debug, thiserror::Error)]
-pub enum ReplaceInFileError {
-    #[error("Replace in file error: {0}")]
-    ReplaceError(#[from] std::io::Error),
-    #[error("Incorrect parameters error: {0}")]
-    ParametersError(String),
-    #[error("Search string not found: {0}")]
-    SearchNotFound(String),
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplaceInFileToolArgs {
+    pub path: String,
+    pub diff: String,
 }
 
 pub struct ReplaceInFileTool {
@@ -32,10 +38,12 @@ impl ReplaceInFileTool {
     }
 }
 
-impl ClineTool for ReplaceInFileTool {
+impl Tool for ReplaceInFileTool {
     const NAME: &'static str = "replace_in_file";
 
-    type Error = ReplaceInFileError;
+    type Error = std::io::Error;
+    type Args = ReplaceInFileToolArgs;
+    type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -87,53 +95,36 @@ impl ClineTool for ReplaceInFileTool {
         }
     }
 
-    async fn call(&self, args: &HashMap<String, String>) -> Result<String, Self::Error> {
-        if let Some(path) = args.get("path") {
-            if let Some(content) = args.get("diff") {
-                let path = if Path::new(path).is_absolute() {
-                    Path::new(path).to_path_buf()
-                } else {
-                    self.workspace_dir.join(path)
-                };
-                tracing::info!("Replace in file '{}'", path.display());
-                let replace_diffs = parse_replace_diff(content)?;
-                let original_content =
-                    fs::read_to_string(path.clone()).map_err(ReplaceInFileError::ReplaceError)?;
-                let mut modified_content = original_content.clone();
-                for replace_diff in replace_diffs {
-                    let search = &replace_diff.search;
-                    let replace = &replace_diff.replace;
-                    let start = original_content.find(search);
-                    if let Some(start) = start {
-                        let end = start + search.len();
-                        modified_content.replace_range(start..end, replace);
-                    } else {
-                        return Err(ReplaceInFileError::SearchNotFound(replace_diff.search));
-                    }
-                }
-                let diff = create_patch(&original_content, &modified_content);
-                fs::write(path, modified_content).map_err(ReplaceInFileError::ReplaceError)?;
-                Ok(format!(
-                    "The user made the following updates to your content:\n\n{}",
-                    diff
-                ))
-            } else {
-                Err(ReplaceInFileError::ParametersError("diff".to_string()))
-            }
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        let path = if Path::new(&args.path).is_absolute() {
+            Path::new(&args.path).to_path_buf()
         } else {
-            Err(ReplaceInFileError::ParametersError("path".to_string()))
+            self.workspace_dir.join(args.path)
+        };
+        tracing::info!("Replace in file '{}'", path.display());
+        let replace_diffs = parse_replace_diff(&args.diff)?;
+        let original_content = fs::read_to_string(path.clone())?;
+        let mut modified_content = original_content.clone();
+        for replace_diff in replace_diffs {
+            let search = &replace_diff.search;
+            let replace = &replace_diff.replace;
+            let start = original_content.find(search);
+            if let Some(start) = start {
+                let end = start + search.len();
+                modified_content.replace_range(start..end, replace);
+            } else {
+                return Err(std::io::Error::new(
+                    ErrorKind::NotFound,
+                    format!("Search string not found: {}", search),
+                ));
+            }
         }
-    }
-
-    fn usage(&self) -> &str {
-        indoc! {"
-            <replace_in_file>
-            <path>File path here</path>
-            <diff>
-            Search and replace blocks here
-            </diff>
-            </replace_in_file>
-        "}
+        let diff = create_patch(&original_content, &modified_content);
+        fs::write(path, modified_content)?;
+        Ok(format!(
+            "The user made the following updates to your content:\n\n{}",
+            diff
+        ))
     }
 }
 
@@ -143,7 +134,7 @@ struct ReplaceDiffBlock {
     pub replace: String,
 }
 
-fn parse_replace_diff(diff: &str) -> Result<Vec<ReplaceDiffBlock>, ReplaceInFileError> {
+fn parse_replace_diff(diff: &str) -> Result<Vec<ReplaceDiffBlock>, std::io::Error> {
     let mut diff_blocks = Vec::new();
     let mut current_block = ReplaceDiffBlock::default();
     let mut start_search = false;
