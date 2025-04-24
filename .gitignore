@@ -1,4 +1,7 @@
 debug/
 target/
+logs/
+.vscode/
+history.json
 **/*.rs.bk
 *.pdb

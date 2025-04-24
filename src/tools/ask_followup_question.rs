@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use indoc::{formatdoc, indoc};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
@@ -9,7 +7,7 @@ use serde_json::json;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AskFollowupQuestionToolArgs {
     pub question: String,
-    pub options: String,
+    pub options: Option<Vec<String>>,
 }
 
 pub struct AskFollowupQuestionTool;
@@ -55,7 +53,7 @@ impl Tool for AskFollowupQuestionTool {
         }
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    async fn call(&self, _args: Self::Args) -> Result<Self::Output, Self::Error> {
         Ok("".to_string())
     }
 }

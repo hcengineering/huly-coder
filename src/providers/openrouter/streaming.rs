@@ -1,10 +1,11 @@
-use std::{collections::HashMap, fs};
+use std::collections::HashMap;
 
 use async_stream::stream;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use reqwest::RequestBuilder;
 use rig::{
     message::{ToolCall, ToolFunction},
+    providers::openai::Usage,
     streaming::{self},
 };
 use serde_json::{json, Value};
@@ -97,13 +98,13 @@ pub struct DeltaResponse {
     pub native_finish_reason: Option<String>,
 }
 
-#[derive(Clone)]
-pub struct FinalCompletionResponse {
-    pub usage: ResponseUsage,
-}
+//#[derive(Clone)]
+//pub struct FinalCompletionResponse {
+//    pub usage: ResponseUsage,
+//}
 
 impl StreamingCompletionModel for super::CompletionModel {
-    type StreamingResponse = FinalCompletionResponse;
+    type StreamingResponse = rig::providers::openai::StreamingCompletionResponse;
 
     async fn stream(
         &self,
@@ -113,11 +114,11 @@ impl StreamingCompletionModel for super::CompletionModel {
         let request = self.create_completion_request(completion_request)?;
 
         let request = merge(request, json!({"stream": true}));
-        fs::write(
-            "request.json",
-            serde_json::to_string_pretty(&request).unwrap(),
-        )
-        .unwrap();
+        //        fs::write(
+        //            "request.json",
+        //            serde_json::to_string_pretty(&request).unwrap(),
+        //        )
+        //        .unwrap();
         let builder = self.client.post("/chat/completions").json(&request);
 
         send_streaming_request(builder).await
@@ -126,7 +127,10 @@ impl StreamingCompletionModel for super::CompletionModel {
 
 pub async fn send_streaming_request(
     request_builder: RequestBuilder,
-) -> Result<streaming::StreamingCompletionResponse<FinalCompletionResponse>, CompletionError> {
+) -> Result<
+    streaming::StreamingCompletionResponse<rig::providers::openai::StreamingCompletionResponse>,
+    CompletionError,
+> {
     let response = request_builder.send().await?;
 
     if !response.status().is_success() {
@@ -266,7 +270,10 @@ pub async fn send_streaming_request(
                     }
 
                     if let Some(usage) = data.usage {
-                        final_usage = Some(usage);
+                        final_usage = Some(Usage {
+                            prompt_tokens: usage.prompt_tokens as usize,
+                            total_tokens: usage.total_tokens as usize,
+                        });
                     }
                 }
 
@@ -309,8 +316,11 @@ pub async fn send_streaming_request(
             yield Ok(streaming::RawStreamingChoice::ToolCall(tool_call.id, tool_call.function.name, tool_call.function.arguments));
         }
 
-        yield Ok(streaming::RawStreamingChoice::FinalResponse(FinalCompletionResponse {
-            usage: final_usage.unwrap_or_default()
+        yield Ok(streaming::RawStreamingChoice::FinalResponse(rig::providers::openai::StreamingCompletionResponse {
+            usage: final_usage.unwrap_or(Usage {
+                prompt_tokens: 0,
+                total_tokens: 0,
+            })
         }))
 
     });
