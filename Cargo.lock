@@ -241,6 +241,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "convert_case"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1649,8 +1658,8 @@ dependencies = [
 
 [[package]]
 name = "rig-core"
-version = "0.11.0"
-source = "git+https://github.com/0xPlaygrounds/rig.git?branch=refactor%2Fstreaming#a78969fd9a5e2d5a49dfac9f0482eb879fdb11fc"
+version = "0.11.1"
+source = "git+https://github.com/kosz78/rig.git?branch=refactor%2Fstreaming#47641e3e20896e371bdcf143e333182cd60ff629"
 dependencies = [
  "async-stream",
  "base64",
@@ -1670,12 +1679,14 @@ dependencies = [
 
 [[package]]
 name = "rig-derive"
-version = "0.1.0"
-source = "git+https://github.com/0xPlaygrounds/rig.git?branch=refactor%2Fstreaming#a78969fd9a5e2d5a49dfac9f0482eb879fdb11fc"
+version = "0.1.1"
+source = "git+https://github.com/kosz78/rig.git?branch=refactor%2Fstreaming#47641e3e20896e371bdcf143e333182cd60ff629"
 dependencies = [
+ "convert_case",
  "indoc",
  "proc-macro2",
  "quote",
+ "serde_json",
  "syn",
 ]
 

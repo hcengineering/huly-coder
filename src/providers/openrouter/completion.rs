@@ -134,9 +134,6 @@ impl CompletionModel {
             None => vec![],
         };
 
-        // Convert prompt to user message
-        let prompt: Vec<Message> = completion_request.prompt_with_context().try_into()?;
-
         // Convert existing chat history
         let chat_history: Vec<Message> = completion_request
             .chat_history
@@ -149,7 +146,6 @@ impl CompletionModel {
 
         // Combine all messages into a single history
         full_history.extend(chat_history);
-        full_history.extend(prompt);
         let messages: Vec<Value> = full_history
             .into_iter()
             .map(|ref m| match m {
