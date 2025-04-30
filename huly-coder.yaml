@@ -1,8 +1,8 @@
-provider: LMStudio
-#provider: OpenRouter
-model: qwen3-8b
+#provider: LMStudio
+provider: OpenRouter
+#model: qwen3-8b
 #model: deepseek-r1-distill-llama-8b
-#model: anthropic/claude-3.5-sonnet
+model: anthropic/claude-3.5-sonnet
 workspace: ./target/workspace
 user_instructions: |
     You are dedicated software engineer working alone. You’re free to choose any technology, approach, and solution. 
