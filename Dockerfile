@@ -12,4 +12,5 @@ ENV SHELL=/bin/bash
 
 LABEL org.opencontainers.image.source="https://github.com/hcengineering/huly-coder"
 COPY --from=builder /usr/src/huly-coder/target/release/huly-coder /usr/local/bin/huly-coder
+COPY --from=builder /usr/src/huly-coder/huly-coder.yaml huly-coder.yaml
 ENTRYPOINT ["/usr/local/bin/huly-coder"]
