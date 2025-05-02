@@ -46,8 +46,7 @@ impl From<u8> for FocusedComponent {
     }
 }
 
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ModelState {
     pub messages: Vec<Message>,
     pub task_status: AgentTaskStatus,
@@ -77,7 +76,6 @@ pub struct App<'a> {
     pub model: ModelState,
     pub ui: UiState<'a>,
 }
-
 
 impl UiState<'_> {
     fn new(workspace: String) -> Self {

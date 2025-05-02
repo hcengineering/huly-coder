@@ -82,14 +82,14 @@ impl Theme {
     /// Get the default dark theme
     pub fn dark() -> Self {
         Self {
-            background: Color::from_u32(0x25262A),
-            background_highlight: Color::from_u32(0x292A2E),
-            panel: Color::from_u32(0x2A1F3A),
-            panel_shadow: Color::from_u32(0x231A2F),
+            background: Color::Black,
+            background_highlight: Color::DarkGray,
+            panel: Color::Black,
+            panel_shadow: Color::DarkGray,
             text: Color::White,
-            inactive_text: Color::from_u32(0x888888),
+            inactive_text: Color::Gray,
             tool_call: Color::from_u32(0x6EB4BF),
-            focus: Color::from_u32(0x714AC9),
+            focus: Color::Blue,
             primary: Color::from_u32(0xC1C9D5),
             secondary: Color::Blue,
             highlight: Color::Yellow,
@@ -97,8 +97,8 @@ impl Theme {
             warning: Color::Yellow,
             error: Color::Red,
             inactive: Color::DarkGray,
-            status: Color::from_u32(0x303030),
-            border: Color::from_u32(0x37383B),
+            status: Color::DarkGray,
+            border: Color::DarkGray,
         }
     }
 

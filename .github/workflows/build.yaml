@@ -1,0 +1,36 @@
+name: "Build"
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    name: Build on Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/build
+        with:
+          os: linux
+          arch: x64
+  build-macos:
+    name: Build on MacOS
+    runs-on: macos-latest
+    steps:
+      - uses: ./.github/actions/build
+        with:
+          os: macos
+          arch: aarch64
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: ./.github/actions/build
+        with:
+          os: windows
+          arch: x64
