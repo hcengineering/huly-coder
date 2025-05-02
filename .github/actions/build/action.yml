@@ -19,8 +19,10 @@ runs:
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
+      shell: bash
       run: cargo build --release
     - name: Copy config
+      shell: bash
       run: |
         cp huly-coder.yaml target/release/huly-coder.yaml
     - name: Upload artifact
