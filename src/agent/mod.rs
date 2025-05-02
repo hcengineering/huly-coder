@@ -26,10 +26,9 @@ use rig::OneOrMany;
 use tokio::sync::mpsc;
 
 pub mod event;
-mod utils;
+pub mod utils;
 pub use event::AgentControlEvent;
 pub use event::AgentOutputEvent;
-pub use utils::is_ignored;
 
 use self::event::AgentCommandStatus;
 use self::event::AgentTaskStatus;
@@ -98,40 +97,51 @@ impl Agent {
                     .build(),
             ),
             ProviderKind::OpenRouter => Box::new(
-                crate::providers::openrouter::Client::from_env()
-                    .agent(&config.model)
-                    .preamble(&system_prompt)
-                    .tool(ReadFileTool::new(&config.workspace))
-                    .tool(ListFilesTool::new(&config.workspace))
-                    .tool(WriteToFileTool::new(&config.workspace))
-                    .tool(ExecuteCommandTool::new(&config.workspace))
-                    .tool(ListCodeDefinitionNamesTool::new(&config.workspace))
-                    .tool(ReplaceInFileTool::new(&config.workspace))
-                    .tool(SearchFilesTool::new(&config.workspace))
-                    .tool(AccessMcpResourceTool)
-                    .tool(UseMcpTool)
-                    .tool(AskFollowupQuestionTool)
-                    .tool(AttemptCompletionTool)
-                    .temperature(0.0)
-                    .build(),
+                crate::providers::openrouter::Client::new(
+                    &config
+                        .provider_api_key
+                        .clone()
+                        .expect("provider_api_key is required for OpenRouter"),
+                )
+                .agent(&config.model)
+                .preamble(&system_prompt)
+                .tool(ReadFileTool::new(&config.workspace))
+                .tool(ListFilesTool::new(&config.workspace))
+                .tool(WriteToFileTool::new(&config.workspace))
+                .tool(ExecuteCommandTool::new(&config.workspace))
+                .tool(ListCodeDefinitionNamesTool::new(&config.workspace))
+                .tool(ReplaceInFileTool::new(&config.workspace))
+                .tool(SearchFilesTool::new(&config.workspace))
+                .tool(AccessMcpResourceTool)
+                .tool(UseMcpTool)
+                .tool(AskFollowupQuestionTool)
+                .tool(AttemptCompletionTool)
+                .temperature(0.0)
+                .build(),
             ),
             ProviderKind::LMStudio => Box::new(
-                rig::providers::openai::Client::from_url("", "http://127.0.0.1:1234/v1")
-                    .agent(&config.model)
-                    .preamble(&system_prompt)
-                    .tool(ReadFileTool::new(&config.workspace))
-                    .tool(ListFilesTool::new(&config.workspace))
-                    .tool(WriteToFileTool::new(&config.workspace))
-                    .tool(ExecuteCommandTool::new(&config.workspace))
-                    .tool(ListCodeDefinitionNamesTool::new(&config.workspace))
-                    .tool(ReplaceInFileTool::new(&config.workspace))
-                    .tool(SearchFilesTool::new(&config.workspace))
-                    .tool(AccessMcpResourceTool)
-                    .tool(UseMcpTool)
-                    .tool(AskFollowupQuestionTool)
-                    .tool(AttemptCompletionTool)
-                    .temperature(0.0)
-                    .build(),
+                rig::providers::openai::Client::from_url(
+                    "",
+                    &config
+                        .provider_base_url
+                        .clone()
+                        .unwrap_or("http://127.0.0.1:1234/v1".to_string()),
+                )
+                .agent(&config.model)
+                .preamble(&system_prompt)
+                .tool(ReadFileTool::new(&config.workspace))
+                .tool(ListFilesTool::new(&config.workspace))
+                .tool(WriteToFileTool::new(&config.workspace))
+                .tool(ExecuteCommandTool::new(&config.workspace))
+                .tool(ListCodeDefinitionNamesTool::new(&config.workspace))
+                .tool(ReplaceInFileTool::new(&config.workspace))
+                .tool(SearchFilesTool::new(&config.workspace))
+                .tool(AccessMcpResourceTool)
+                .tool(UseMcpTool)
+                .tool(AskFollowupQuestionTool)
+                .tool(AttemptCompletionTool)
+                .temperature(0.0)
+                .build(),
             ),
         }
     }

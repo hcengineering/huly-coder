@@ -11,6 +11,9 @@ use crossterm::terminal::LeaveAlternateScreen;
 use ratatui::prelude::CrosstermBackend;
 use ratatui::DefaultTerminal;
 use ratatui::Terminal;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer;
 
 use self::config::Config;
 use crate::agent::AgentControlEvent;
@@ -25,12 +28,20 @@ mod tui;
 
 fn init_logger() {
     let writer = tracing_appender::rolling::daily("logs", "huly-coder.log");
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .with_ansi(false)
-        .with_writer(writer)
-        .with_target(true)
-        .init();
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(writer)
+                .with_target(true)
+                .with_filter(
+                    tracing_subscriber::filter::Targets::new()
+                        .with_target("ignore", tracing::Level::WARN)
+                        .with_target("globset", tracing::Level::WARN)
+                        .with_default(tracing::Level::TRACE),
+                ),
+        )
+        .init()
 }
 
 fn init_panic_hook() {
@@ -59,11 +70,10 @@ pub fn restore_tui() -> io::Result<()> {
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    dotenv::dotenv().ok();
     init_panic_hook();
     init_logger();
     tracing::info!("Start");
-    let config = Config::load()?;
+    let config = Config::new()?;
     // start agent
     let (output_sender, output_receiver) =
         tokio::sync::mpsc::unbounded_channel::<AgentOutputEvent>();

@@ -9,7 +9,6 @@ use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use walkdir::WalkDir;
 
 pub struct SearchFilesTool {
     pub workspace_dir: PathBuf,
@@ -88,8 +87,8 @@ impl Tool for SearchFilesTool {
         let writer = Cursor::new(&mut buffer);
         let mut printer = StandardBuilder::new().build_no_color(writer);
 
-        for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
-            if !entry.file_type().is_file() {
+        for entry in ignore::Walk::new(path).into_iter().filter_map(|e| e.ok()) {
+            if !entry.file_type().is_some_and(|t| t.is_file()) {
                 continue;
             }
             let _ = searcher.search_path(

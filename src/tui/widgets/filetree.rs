@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use crate::agent::utils::MAX_FILES;
+use crate::tui::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
@@ -10,10 +12,6 @@ use ratatui::widgets::{
     Block, BorderType, Borders, Scrollbar, ScrollbarOrientation, StatefulWidget,
 };
 use tui_tree_widget::{Tree, TreeItem, TreeState};
-use walkdir::WalkDir;
-
-use crate::agent::is_ignored;
-use crate::tui::Theme;
 
 #[derive(Debug)]
 pub struct FileTreeState {
@@ -86,13 +84,12 @@ impl FileTreeState {
         self.items.clear();
         let mut roots: HashMap<String, Rc<RefCell<FileDirTreeItem>>> = HashMap::new();
         let mut files = vec![];
-        WalkDir::new(&self.workspace)
-            .follow_links(false)
-            .same_file_system(true)
+        ignore::WalkBuilder::new(&self.workspace)
+            .filter_entry(|e| e.file_name() != "node_modules")
+            .build()
             .into_iter()
-            .filter_entry(|e| !is_ignored(e))
             .filter_map(|e| e.ok())
-            .take(200)
+            .take(MAX_FILES)
             .for_each(|entry| {
                 let path = entry.path().strip_prefix(&self.workspace).unwrap();
                 let metadata = entry.metadata().unwrap();

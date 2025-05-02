@@ -65,12 +65,11 @@ impl Tool for ListFilesTool {
             self.workspace_dir.join(args.path)
         };
         let recursive = args.recursive.unwrap_or(false);
-        tracing::info!("List files in '{}'", path.display());
         let mut files: Vec<String> = Vec::default();
-        for entry in walkdir::WalkDir::new(path.clone())
-            .max_depth(if recursive { usize::MAX } else { 1 })
-            .follow_links(false)
-            .same_file_system(true)
+        for entry in ignore::WalkBuilder::new(path.clone())
+            .max_depth(if recursive { None } else { Some(1) })
+            .filter_entry(|e| e.file_name() != "node_modules")
+            .build()
             .into_iter()
             .filter_map(|e| e.ok())
         {
