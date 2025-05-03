@@ -83,7 +83,7 @@ impl Theme {
     pub fn dark() -> Self {
         Self {
             background: Color::Black,
-            background_highlight: Color::DarkGray,
+            background_highlight: Color::Indexed(234),
             panel: Color::Black,
             panel_shadow: Color::DarkGray,
             text: Color::White,
@@ -98,7 +98,7 @@ impl Theme {
             error: Color::Red,
             inactive: Color::DarkGray,
             status: Color::DarkGray,
-            border: Color::DarkGray,
+            border: Color::Indexed(236),
         }
     }
 

@@ -4,6 +4,7 @@ use rig::message::Message;
 pub struct AgentTaskStatus {
     pub current_tokens: u32,
     pub max_tokens: u32,
+    pub processing: bool,
 }
 
 #[derive(Clone, Debug, Default)]

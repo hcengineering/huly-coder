@@ -2,15 +2,14 @@ pub mod filetree;
 mod message;
 
 use crate::tui::App;
-use format_num::format_num;
 use ratatui::layout::{Margin, Offset};
 use ratatui::prelude::StatefulWidget;
-use ratatui::symbols;
-use ratatui::widgets::{LineGauge, ScrollbarState, Widget};
+use ratatui::style::Modifier;
+use ratatui::widgets::{ScrollbarState, Widget};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Padding, Paragraph, Scrollbar, ScrollbarOrientation},
 };
@@ -82,14 +81,26 @@ impl Widget for &mut App<'_> {
             .split(main_layout[1]);
 
         // Left panel (chat history + input)
-        let left_panel = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(4), // Task panel
-                Constraint::Min(3),    // Chat history
-                Constraint::Length(3), // Input field
-            ])
-            .split(content_layout[0]);
+        let left_panel = if let Some(error_message) = &self.model.last_error {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(4), // Task panel
+                    Constraint::Fill(3),   // Chat history
+                    Constraint::Max(u16::min(10, (error_message.lines().count() + 2) as u16)), // Error message
+                    Constraint::Length(3), // Input field
+                ])
+                .split(content_layout[0])
+        } else {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(4), // Task panel
+                    Constraint::Min(3),    // Chat history
+                    Constraint::Length(3), // Input field
+                ])
+                .split(content_layout[0])
+        };
 
         // Task block
         let task_layout = Layout::default()
@@ -123,23 +134,23 @@ impl Widget for &mut App<'_> {
             .render(left_panel[0], buf);
 
         Paragraph::new(self.current_task_text()).render(task_layout[0], buf);
-        let progress_value = self.model.task_status.current_tokens as f64
-            / f64::max(
-                self.model.task_status.current_tokens as f64,
-                f64::max(1.0, self.model.task_status.max_tokens as f64),
-            );
-
-        LineGauge::default()
-            .filled_style(Style::default().fg(Color::Blue))
-            .unfilled_style(Style::default().fg(Color::DarkGray))
-            .line_set(symbols::line::ROUNDED)
-            .label(format!(
-                "{}/{}",
-                format_num!(".2s", self.model.task_status.current_tokens),
-                format_num!(".2s", self.model.task_status.max_tokens)
-            ))
-            .ratio(progress_value)
-            .render(task_status_layout[0], buf);
+        //        let progress_value = self.model.task_status.current_tokens as f64
+        //            / f64::max(
+        //                self.model.task_status.current_tokens as f64,
+        //                f64::max(1.0, self.model.task_status.max_tokens as f64),
+        //            );
+        //
+        //        LineGauge::default()
+        //            .filled_style(Style::default().fg(Color::Blue))
+        //            .unfilled_style(Style::default().fg(Color::DarkGray))
+        //            .line_set(symbols::line::ROUNDED)
+        //            .label(format!(
+        //                "{}/{}",
+        //                format_num!(".2s", self.model.task_status.current_tokens),
+        //                format_num!(".2s", self.model.task_status.max_tokens)
+        //            ))
+        //            .ratio(progress_value)
+        //            .render(task_status_layout[0], buf);
         //        Paragraph::new("API Cost: $1.7681")
         //            .right_aligned()
         //            .render(task_status_layout[1], buf);
@@ -153,23 +164,21 @@ impl Widget for &mut App<'_> {
             .border_type(BorderType::Rounded)
             .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::History)));
 
-        self.ui.history_scroll_state = self
-            .ui
-            .history_scroll_state
-            .content_length(self.model.messages.len());
+        let chat_len = self.model.messages.len();
+        self.ui.history_scroll_state = self.ui.history_scroll_state.content_length(chat_len);
         let builder = ListBuilder::new(|context| {
             let item = MessageWidget::new(
                 &self.model.messages[context.index],
                 &theme,
                 context.is_selected,
                 left_panel[1].width,
-                context.index == self.model.messages.len() - 1,
+                context.index == chat_len - 1 && self.model.task_status.processing,
                 self.ui.throbber_state.clone(),
             );
             let main_axis_size = item.main_axis_size();
             (item, main_axis_size)
         });
-        let list = ListView::new(builder, self.model.messages.len())
+        let list = ListView::new(builder, chat_len)
             .block(chat_block)
             .scroll_axis(ScrollAxis::Vertical)
             .infinite_scrolling(false)
@@ -178,15 +187,44 @@ impl Widget for &mut App<'_> {
         list.render(left_panel[1], buf, &mut self.ui.history_state);
         render_scrollbar(left_panel[1], buf, &mut self.ui.history_scroll_state);
 
+        // Error message
+        if let Some(error) = self.model.last_error.as_ref() {
+            let error_block = Block::bordered()
+                .borders(Borders::TOP | Borders::LEFT)
+                .title(" Error ")
+                .padding(Padding::horizontal(1))
+                .title_alignment(Alignment::Right)
+                .title_style(theme.error_style())
+                .border_type(BorderType::Rounded)
+                .border_style(theme.error_style());
+            Paragraph::new(error.clone())
+                .block(error_block)
+                .style(theme.error_style())
+                .render(left_panel[2], buf);
+        }
         // Input field
-        let input_block = Block::bordered()
-            .borders(Borders::TOP | Borders::LEFT)
-            .title(" Input ")
-            .padding(Padding::horizontal(1))
-            .title_alignment(Alignment::Right)
-            .title_style(theme.primary_style())
-            .border_type(BorderType::Rounded)
-            .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::Input)));
+        let input_block =
+            Block::bordered()
+                .borders(Borders::TOP | Borders::LEFT)
+                .title(format!(
+                    " {} ",
+                    if self.model.task_status.processing {
+                        "Input"
+                    } else {
+                        "Waiting User Prompt"
+                    }
+                ))
+                .padding(Padding::horizontal(1))
+                .title_alignment(Alignment::Right)
+                .title_style(theme.primary_style().add_modifier(
+                    if self.model.task_status.processing {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::RAPID_BLINK
+                    },
+                ))
+                .border_type(BorderType::Rounded)
+                .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::Input)));
 
         // Create a TextArea with the App's input text
         self.ui.textarea.set_block(input_block);
@@ -199,7 +237,14 @@ impl Widget for &mut App<'_> {
             .set_placeholder_text("Type your message here...");
 
         // Render the textarea
-        self.ui.textarea.render(left_panel[2], buf);
+        self.ui.textarea.render(
+            left_panel[if self.model.last_error.is_some() {
+                3
+            } else {
+                2
+            }],
+            buf,
+        );
 
         // Right panel (file tree + terminal)
         let right_panel = Layout::default()

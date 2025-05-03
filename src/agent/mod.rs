@@ -21,6 +21,7 @@ use rig::message::ToolResultContent;
 use rig::message::UserContent;
 use rig::streaming::StreamingCompletionResponse;
 use rig::tool::Tool;
+use rig::tool::ToolError;
 use rig::tool::ToolSetError;
 use rig::OneOrMany;
 use tokio::sync::mpsc;
@@ -46,6 +47,7 @@ pub struct Agent {
     assistant_content: Option<String>,
     has_completion: bool,
     pending_tool_id: Option<String>,
+    current_tokens: u32,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -73,6 +75,7 @@ impl Agent {
             assistant_content: None,
             has_completion: false,
             pending_tool_id: None,
+            current_tokens: 0,
         }
     }
 
@@ -166,6 +169,7 @@ impl Agent {
             return Ok(());
         }
         let Some(agent) = self.agent.as_mut() else {
+            self.processing = false;
             return Ok(());
         };
 
@@ -181,6 +185,7 @@ impl Agent {
         }
 
         let Some(stream) = self.stream.as_mut() else {
+            self.processing = false;
             return Ok(());
         };
 
@@ -223,7 +228,17 @@ impl Agent {
                         }
                         Err(e) => {
                             tracing::error!("Error calling tool: {}", e);
-                            (format!("Tool called with error: {}", e), true)
+                            match e {
+                                ToolSetError::ToolCallError(tce) => {
+                                    match tce {
+                                        ToolError::ToolCallError(ce) => {
+                                            (format!("The tool execution failed with the following error: <error>{}</error>", ce), true)
+                                        }
+                                        _ => (format!("The tool execution failed with the following error: <error>{}</error>", tce), true),
+                                    }
+                                }
+                                _ => (format!("The tool execution failed with the following error: <error>{}</error>", e), true),
+                            }
                         }
                     };
 
@@ -246,28 +261,30 @@ impl Agent {
                         );
                         self.pending_tool_id = Some(tool_call.id);
                         self.processing = false;
-                    } else if !is_error {
-                        match tool_call.function.name.as_str() {
-                            ReadFileTool::NAME
-                            | WriteToFileTool::NAME
-                            | ListFilesTool::NAME
-                            | ReplaceInFileTool::NAME => {
-                                if let Some(path) = tool_call
-                                    .function
-                                    .arguments
-                                    .as_object()
-                                    .unwrap()
-                                    .get("path")
-                                {
-                                    self.sender
-                                        .send(AgentOutputEvent::HighlightFile(
-                                            path.as_str().unwrap().to_string(),
-                                            tool_call.function.name == WriteToFileTool::NAME,
-                                        ))
-                                        .unwrap();
+                    } else {
+                        if !is_error {
+                            match tool_call.function.name.as_str() {
+                                ReadFileTool::NAME
+                                | WriteToFileTool::NAME
+                                | ListFilesTool::NAME
+                                | ReplaceInFileTool::NAME => {
+                                    if let Some(path) = tool_call
+                                        .function
+                                        .arguments
+                                        .as_object()
+                                        .unwrap()
+                                        .get("path")
+                                    {
+                                        self.sender
+                                            .send(AgentOutputEvent::HighlightFile(
+                                                path.as_str().unwrap().to_string(),
+                                                tool_call.function.name == WriteToFileTool::NAME,
+                                            ))
+                                            .unwrap();
+                                    }
                                 }
+                                _ => {}
                             }
-                            _ => {}
                         }
                         let mut result_message = Message::User {
                             content: OneOrMany::one(UserContent::tool_result(
@@ -284,6 +301,7 @@ impl Agent {
                     }
                 }
                 Err(e) => {
+                    self.processing = false;
                     self.stream = None;
                     return Err(e.into());
                 }
@@ -294,15 +312,16 @@ impl Agent {
                 > = From::from(self.stream.take().unwrap());
                 let usage = response.raw_response.unwrap().usage;
                 tracing::info!("Usage: {:?}", usage);
-                self.sender
-                    .send(AgentOutputEvent::TaskStatus(AgentTaskStatus {
-                        current_tokens: usage.total_tokens as u32,
-                        max_tokens: 1,
-                    }))
-                    .unwrap();
+                self.current_tokens = usage.total_tokens as u32;
                 self.assistant_content = None;
                 if self.has_completion {
                     self.pending_tool_id = None;
+                    self.processing = false;
+                } else if self
+                    .messages
+                    .last()
+                    .is_some_and(|message| !matches!(message, Message::User { .. }))
+                {
                     self.processing = false;
                 }
                 tracing::debug!("persist_history");
@@ -334,6 +353,7 @@ impl Agent {
                     }
                 }
             }
+            let prev_processing = self.processing;
             if let Err(e) = self.process_messages().await {
                 tracing::debug!("persist_history");
                 persist_history(&self.messages);
@@ -346,6 +366,11 @@ impl Agent {
                 tracing::error!("Error processing messages: {}", e);
                 self.processing = false;
                 self.has_completion = false;
+            }
+            if prev_processing != self.processing {
+                self.sender
+                    .send(AgentOutputEvent::TaskStatus(self.status()))
+                    .ok();
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
@@ -367,10 +392,24 @@ impl Agent {
         self.add_message(message);
         self.processing = true;
         self.has_completion = false;
+        self.sender
+            .send(AgentOutputEvent::TaskStatus(self.status()))
+            .ok();
+    }
+
+    fn status(&self) -> AgentTaskStatus {
+        AgentTaskStatus {
+            current_tokens: self.current_tokens,
+            max_tokens: 1,
+            processing: self.processing,
+        }
     }
 
     fn cancel_task(&mut self) {
         self.processing = false;
         self.has_completion = false;
+        self.sender
+            .send(AgentOutputEvent::TaskStatus(self.status()))
+            .ok();
     }
 }

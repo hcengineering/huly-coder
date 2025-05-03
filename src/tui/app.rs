@@ -51,6 +51,7 @@ pub struct ModelState {
     pub messages: Vec<Message>,
     pub task_status: AgentTaskStatus,
     pub execute_command: AgentCommandStatus,
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug)]
@@ -58,7 +59,6 @@ pub struct UiState<'a> {
     pub textarea: TextArea<'a>,
     pub focus: FocusedComponent,
     pub history_scroll_state: ScrollbarState,
-    pub history_scroll_position: u16,
     pub terminal_scroll_state: ScrollbarState,
     pub terminal_scroll_position: u16,
     pub tree_state: FileTreeState,
@@ -83,7 +83,6 @@ impl UiState<'_> {
             textarea: TextArea::default(),
             focus: FocusedComponent::Input,
             history_scroll_state: ScrollbarState::default(),
-            history_scroll_position: 0,
             terminal_scroll_state: ScrollbarState::default(),
             terminal_scroll_position: 0,
             tree_state: FileTreeState::new(workspace),
@@ -137,6 +136,7 @@ impl App<'_> {
                                 {
                                     self.ui.textarea.select_all();
                                     self.ui.textarea.cut();
+                                    self.model.last_error = None;
                                     self.agent_sender
                                         .send(agent::AgentControlEvent::SendMessage(
                                             self.ui.textarea.yank_text(),
@@ -149,10 +149,6 @@ impl App<'_> {
                             }
                             FocusedComponent::History => {
                                 Self::handle_list_input(&mut self.ui.history_state, &event);
-                                Self::handle_scroll_input(
-                                    &mut self.ui.history_scroll_position,
-                                    &event,
-                                );
                             }
                             FocusedComponent::Terminal => {
                                 Self::handle_scroll_input(
@@ -169,17 +165,26 @@ impl App<'_> {
                         AgentOutputEvent::LoadMessages(_messages) => {}
                         AgentOutputEvent::AddMessage(message) => {
                             self.model.messages.push(message);
+                            self.ui
+                                .history_state
+                                .select(Some(self.model.messages.len() - 1));
                         }
                         AgentOutputEvent::UpdateMessage(message) => {
                             if !self.model.messages.is_empty() {
                                 let len = self.model.messages.len() - 1;
                                 self.model.messages[len] = message;
+                                self.ui.history_state.select(Some(len));
                             }
                         }
                         AgentOutputEvent::ExecuteCommand(status) => {
                             self.model.execute_command = status;
                         }
                         AgentOutputEvent::TaskStatus(status) => {
+                            tracing::info!("task_status: {:?}", status);
+                            // if the task is no longer processing, focus input
+                            if self.model.task_status.processing && !status.processing {
+                                self.ui.focus = FocusedComponent::Input;
+                            }
                             self.model.task_status = status;
                         }
                         AgentOutputEvent::HighlightFile(path, is_new) => {
@@ -188,7 +193,9 @@ impl App<'_> {
                             }
                             self.ui.tree_state.highlight_file(path);
                         }
-                        AgentOutputEvent::Error(_) => {}
+                        AgentOutputEvent::Error(error) => {
+                            self.model.last_error = Some(error);
+                        }
                     },
                 },
             }

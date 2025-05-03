@@ -172,7 +172,7 @@ impl Widget for MessageWidget<'_> {
         let block = Block::new()
             .padding(Padding::new(2, 1, 0, 0))
             .style(Style::default().bg(if self.is_selected {
-                self.theme.border
+                self.theme.background_highlight
             } else {
                 self.theme.background
             }))
