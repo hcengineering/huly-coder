@@ -9,7 +9,7 @@ provider: OpenRouter
 model: anthropic/claude-3.5-sonnet
 #provider_api_key: sk-xxxxxxxxxxxxxxxxxxxxx
 #provider_base_url: http://127.0.0.1:1234/v1
-workspace: d:\work\test4
+workspace: ./target/workspace
 user_instructions: |
   You are dedicated software engineer working alone. You’re free to choose any technology, approach, and solution. 
   If in doubt please choose the best way you think. Your goal is to build working software based on user request.
