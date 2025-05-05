@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use indoc::formatdoc;
@@ -6,6 +6,8 @@ use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+
+use super::workspace_to_string;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecuteCommandError {
@@ -22,14 +24,12 @@ pub struct ExecuteCommandToolArgs {
 }
 
 pub struct ExecuteCommandTool {
-    pub workspace_dir: PathBuf,
+    pub workspace: PathBuf,
 }
 
 impl ExecuteCommandTool {
-    pub fn new(workspace_dir: &str) -> Self {
-        Self {
-            workspace_dir: Path::new(workspace_dir).to_path_buf(),
-        }
+    pub fn new(workspace: PathBuf) -> Self {
+        Self { workspace }
     }
 }
 
@@ -50,7 +50,7 @@ impl Tool for ExecuteCommandTool {
                 appropriate chaining syntax for the user's shell. Prefer to execute complex CLI commands over creating \
                 executable scripts, as they are more flexible and easier to run. \
                 Commands will be executed in the current working directory: {workspace_dir}",
-                workspace_dir = self.workspace_dir.display()}.to_string(),
+                workspace_dir = workspace_to_string(&self.workspace)}.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -82,7 +82,7 @@ impl Tool for ExecuteCommandTool {
         } else {
             Command::new("bash")
         };
-        cmd.current_dir(self.workspace_dir.clone())
+        cmd.current_dir(workspace_to_string(&self.workspace))
             .arg(if cfg!(target_os = "windows") {
                 "/C"
             } else {
@@ -91,11 +91,11 @@ impl Tool for ExecuteCommandTool {
             .arg(args.command)
             .output()
             .map(|output| {
-                if output.status.success() {
+                format!(
+                    "{}\n{}",
+                    String::from_utf8(output.stderr).unwrap_or_else(|_| "".to_string()),
                     String::from_utf8(output.stdout).unwrap_or_else(|_| "".to_string())
-                } else {
-                    String::from_utf8(output.stderr).unwrap_or_else(|_| "".to_string())
-                }
+                )
             })
             .map_err(ExecuteCommandError::ExecuteError)
     }

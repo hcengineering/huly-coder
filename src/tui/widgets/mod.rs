@@ -114,7 +114,7 @@ impl Widget for &mut App<'_> {
                     .inner(Margin::new(2, 0))
                     .offset(Offset { x: 0, y: 1 }),
             );
-        let task_status_layout = Layout::default()
+        let _task_status_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Fill(10), // Status of task
@@ -171,6 +171,7 @@ impl Widget for &mut App<'_> {
                 &self.model.messages[context.index],
                 &theme,
                 context.is_selected,
+                self.ui.history_opened_state.contains(&context.index),
                 left_panel[1].width,
                 context.index == chat_len - 1 && self.model.task_status.processing,
                 self.ui.throbber_state.clone(),

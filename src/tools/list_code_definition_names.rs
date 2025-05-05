@@ -1,10 +1,12 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use indoc::formatdoc;
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+
+use crate::tools::workspace_to_string;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ListCodeDefinitionNamesError {
@@ -18,14 +20,12 @@ pub struct ListCodeDefinitionNamesToolArgs {
 }
 
 pub struct ListCodeDefinitionNamesTool {
-    pub workspace_dir: PathBuf,
+    pub workspace: PathBuf,
 }
 
 impl ListCodeDefinitionNamesTool {
-    pub fn new(workspace_dir: &str) -> Self {
-        Self {
-            workspace_dir: Path::new(workspace_dir).to_path_buf(),
-        }
+    pub fn new(workspace: PathBuf) -> Self {
+        Self { workspace }
     }
 }
 
@@ -49,7 +49,7 @@ impl Tool for ListCodeDefinitionNamesTool {
                     "path": {
                         "type": "string",
                         "description": formatdoc!{"The path of the directory (relative to the current working directory {}) \
-                                                    to list top level source code definitions for.", self.workspace_dir.as_path().to_str().unwrap()},
+                                                    to list top level source code definitions for.", workspace_to_string(&self.workspace)},
                     }
                 },
                 "required": ["path"]

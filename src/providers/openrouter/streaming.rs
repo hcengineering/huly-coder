@@ -147,9 +147,9 @@ pub async fn send_streaming_request(
         let mut tool_calls = HashMap::new();
         let mut partial_line = String::new();
         let mut final_usage = None;
+        let mut has_content = false;
 
         while let Some(chunk_result) = stream.next().await {
-            //println!("chunk_result: {:?}", chunk_result);
             let chunk = match chunk_result {
                 Ok(c) => c,
                 Err(e) => {
@@ -216,6 +216,7 @@ pub async fn send_streaming_request(
                 // [{"index": 0, "id": null, "function": {"arguments": "\"}", "name": null}, "type": null}]
                 if let Some(delta) = &choice.delta {
                     if !delta.tool_calls.is_empty() {
+                        has_content = true;
                         for tool_call in &delta.tool_calls {
                             let index = tool_call.index;
 
@@ -265,6 +266,7 @@ pub async fn send_streaming_request(
 
                     if let Some(content) = &delta.content {
                         if !content.is_empty() {
+                            has_content = true;
                             yield Ok(streaming::RawStreamingChoice::Message(content.clone()))
                         }
                     }
@@ -280,6 +282,7 @@ pub async fn send_streaming_request(
                 // Handle message format
                 if let Some(message) = &choice.message {
                     if !message.tool_calls.is_empty() {
+                        has_content = true;
                         for tool_call in &message.tool_calls {
                             let name = tool_call.function.name.clone();
                             let id = tool_call.id.clone();
@@ -305,6 +308,7 @@ pub async fn send_streaming_request(
                     }
 
                     if !message.content.is_empty() {
+                        has_content = true;
                         yield Ok(streaming::RawStreamingChoice::Message(message.content.clone()))
                     }
                 }
@@ -318,6 +322,10 @@ pub async fn send_streaming_request(
                 id: tool_call.id,
                 arguments: tool_call.function.arguments
             });
+        }
+
+        if !has_content {
+            yield Err(CompletionError::ResponseError("The model generated no content".to_string()));
         }
 
         yield Ok(streaming::RawStreamingChoice::FinalResponse(rig::providers::openai::StreamingCompletionResponse {

@@ -29,6 +29,7 @@ async-trait = "0.1.88"
 config = "0.15.11"
 dirs = "6.0.0"
 ignore = "0.4"
+clap = { version = "4.5", features = ["derive"] }
 
 # tui
 crossterm = { version = "0.28.1", features = ["event-stream"] }
@@ -41,3 +42,4 @@ textwrap = "0.16.0"
 throbber-widgets-tui = "0.8.0"
 tui-popup = "0.6.0"
 format_num = "0.1.0"
+termimad = "0.31.3"

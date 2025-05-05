@@ -1,5 +1,5 @@
 use std::io::{Cursor, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use grep_printer::StandardBuilder;
 use grep_regex::RegexMatcher;
@@ -10,8 +10,10 @@ use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::tools::{normalize_path, workspace_to_string};
+
 pub struct SearchFilesTool {
-    pub workspace_dir: PathBuf,
+    pub workspace: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,10 +24,8 @@ pub struct SearchFilesToolArgs {
 }
 
 impl SearchFilesTool {
-    pub fn new(workspace_dir: &str) -> Self {
-        Self {
-            workspace_dir: Path::new(workspace_dir).to_path_buf(),
-        }
+    pub fn new(workspace: PathBuf) -> Self {
+        Self { workspace }
     }
 }
 
@@ -48,7 +48,7 @@ impl Tool for SearchFilesTool {
                     "path": {
                         "type": "string",
                         "description": formatdoc!{"The path of the directory to search in (relative to the current working directory {}). \
-                                                   This directory will be recursively searched.", self.workspace_dir.as_path().to_str().unwrap()},
+                                                   This directory will be recursively searched.", workspace_to_string(&self.workspace)},
                     },
                     "regex": {
                         "type": "string",
@@ -66,19 +66,11 @@ impl Tool for SearchFilesTool {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let path = if Path::new(&args.path).is_absolute() {
-            Path::new(&args.path).to_path_buf()
-        } else {
-            self.workspace_dir.join(args.path)
-        };
+        let path = normalize_path(&self.workspace, &args.path);
         let matcher = RegexMatcher::new_line_matcher(&args.regex).map_err(|e| {
             std::io::Error::new(ErrorKind::InvalidInput, format!("invalid regex: {}", e))
         })?;
-        tracing::info!(
-            "Search for path '{}' and regex {}",
-            path.display(),
-            args.regex
-        );
+        tracing::info!("Search for path '{}' and regex {}", path, args.regex);
         let mut searcher = SearcherBuilder::new()
             .binary_detection(BinaryDetection::quit(b'\x00'))
             .build();
@@ -87,7 +79,7 @@ impl Tool for SearchFilesTool {
         let writer = Cursor::new(&mut buffer);
         let mut printer = StandardBuilder::new().build_no_color(writer);
 
-        for entry in ignore::Walk::new(path).into_iter().filter_map(|e| e.ok()) {
+        for entry in ignore::Walk::new(path).filter_map(|e| e.ok()) {
             if !entry.file_type().is_some_and(|t| t.is_file()) {
                 continue;
             }
@@ -107,7 +99,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_search_files() {
-        let tool = SearchFilesTool::new(".");
+        let tool = SearchFilesTool::new(".".into());
         let res = tool
             .call(SearchFilesToolArgs {
                 path: "src".to_string(),

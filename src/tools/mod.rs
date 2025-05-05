@@ -1,3 +1,5 @@
+use std::path::Path;
+
 pub mod access_mcp_resource;
 pub mod ask_followup_question;
 pub mod attempt_completion;
@@ -16,4 +18,19 @@ pub fn create_patch(original: &str, modified: &str) -> String {
         .lines()
         .skip(2)
         .collect::<String>()
+}
+
+#[inline]
+pub fn workspace_to_string(workspace: &Path) -> String {
+    workspace.to_str().unwrap().to_string().replace("\\", "/")
+}
+
+pub fn normalize_path(workspace: &Path, path: &str) -> String {
+    let path = path.to_string().replace("\\", "/");
+    let workspace = workspace_to_string(workspace);
+    if !path.starts_with(&workspace) {
+        format!("{}/{}", workspace, path)
+    } else {
+        path
+    }
 }

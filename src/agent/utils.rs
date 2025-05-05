@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 
 use rig::message::{Message, UserContent};
 
@@ -17,11 +18,16 @@ fn get_shell_path() -> String {
     }
 }
 
-pub async fn prepare_system_prompt(workspace_dir: &str, user_instructions: &str) -> String {
+pub async fn prepare_system_prompt(workspace_dir: &Path, user_instructions: &str) -> String {
+    let workspace_dir = workspace_dir
+        .as_os_str()
+        .to_str()
+        .unwrap()
+        .replace("\\", "/");
     subst::substitute(
         SYSTEM_PROMPT,
         &HashMap::from([
-            ("WORKSPACE_DIR", workspace_dir),
+            ("WORKSPACE_DIR", workspace_dir.as_str()),
             ("OS_NAME", std::env::consts::OS),
             ("OS_SHELL_EXECUTABLE", &get_shell_path()),
             ("USER_HOME_DIR", dirs::home_dir().unwrap().to_str().unwrap()),
@@ -32,24 +38,24 @@ pub async fn prepare_system_prompt(workspace_dir: &str, user_instructions: &str)
     .unwrap()
 }
 
-pub fn add_env_message<'a>(msg: &'a mut Message, workspace_dir: &'a str) {
+pub fn add_env_message<'a>(msg: &'a mut Message, workspace: &'a Path) {
+    let workspace = workspace.as_os_str().to_str().unwrap().replace("\\", "/");
     let mut files: Vec<String> = Vec::default();
 
-    for entry in ignore::WalkBuilder::new(workspace_dir)
+    for entry in ignore::WalkBuilder::new(&workspace)
         .filter_entry(|e| e.file_name() != "node_modules")
         .build()
-        .into_iter()
         .filter_map(|e| e.ok())
         .take(MAX_FILES)
     {
         files.push(
             entry
                 .path()
-                .strip_prefix(workspace_dir)
-                .unwrap()
                 .to_str()
                 .unwrap()
                 .replace("\\", "/")
+                .strip_prefix(&workspace)
+                .unwrap()
                 .to_string(),
         );
     }
@@ -65,7 +71,7 @@ pub fn add_env_message<'a>(msg: &'a mut Message, workspace_dir: &'a str) {
                 ENV_DETAILS,
                 &HashMap::from([
                     ("TIME", chrono::Local::now().to_rfc2822().as_str()),
-                    ("WORKING_DIR", workspace_dir),
+                    ("WORKING_DIR", &workspace),
                     ("FILES", files),
                 ]),
             )

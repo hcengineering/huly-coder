@@ -48,9 +48,9 @@ impl FileDirTreeItem {
 }
 
 impl FileTreeState {
-    pub fn new(workspace: String) -> Self {
+    pub fn new(workspace: PathBuf) -> Self {
         Self {
-            workspace: PathBuf::from(workspace),
+            workspace,
             items: Vec::default(),
             tree_state: TreeState::default(),
             focused: false,
@@ -87,7 +87,6 @@ impl FileTreeState {
         ignore::WalkBuilder::new(&self.workspace)
             .filter_entry(|e| e.file_name() != "node_modules")
             .build()
-            .into_iter()
             .filter_map(|e| e.ok())
             .take(MAX_FILES)
             .for_each(|entry| {

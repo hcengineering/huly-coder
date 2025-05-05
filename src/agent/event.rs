@@ -15,7 +15,6 @@ pub struct AgentCommandStatus {
 
 #[derive(Clone, Debug)]
 pub enum AgentOutputEvent {
-    LoadMessages(Vec<Message>),
     AddMessage(Message),
     UpdateMessage(Message),
     Error(String),

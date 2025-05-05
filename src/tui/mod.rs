@@ -1,5 +1,6 @@
 mod app;
 mod event;
+mod ratskin;
 mod theme;
 mod widgets;
 

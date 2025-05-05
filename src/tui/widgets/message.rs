@@ -3,16 +3,20 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Padding, Paragraph, StatefulWidget, Widget};
+use ratatui::widgets::{Block, Borders, Padding, Paragraph, StatefulWidget, Widget};
 use rig::message::{AssistantContent, Message, ToolResultContent, UserContent};
+use rig::tool::Tool;
 
-use crate::tui::Theme;
+use crate::tools::attempt_completion::AttemptCompletionTool;
+use crate::tui::{ratskin, Theme};
 
 #[derive(Debug, Clone)]
 pub struct MessageWidget<'a> {
     theme: &'a Theme,
     lines: Vec<Line<'a>>,
+    is_complete: bool,
     in_progress: bool,
+    is_opened: bool,
     throbber_state: throbber_widgets_tui::ThrobberState,
     pub is_selected: bool,
 }
@@ -22,6 +26,7 @@ impl<'a> MessageWidget<'a> {
         message: &'a Message,
         theme: &'a Theme,
         is_selected: bool,
+        is_opened: bool,
         width: u16,
         in_progress: bool,
         throbber_state: throbber_widgets_tui::ThrobberState,
@@ -29,7 +34,9 @@ impl<'a> MessageWidget<'a> {
         let mut this = Self {
             theme,
             is_selected,
+            is_opened,
             in_progress,
+            is_complete: false,
             throbber_state,
             lines: Vec::new(),
         };
@@ -70,37 +77,51 @@ impl<'a> MessageWidget<'a> {
                         })
                         .join("\n");
                     let is_success = !content.contains("<error>");
+                    let suffix = if self.is_opened { "⯆" } else { "▶" };
                     line.spans.push(Span::raw("tool_result: "));
                     line.spans.push(Span::styled(
-                        if is_success {
-                            "SUCCESS ▶"
-                        } else {
-                            "ERROR ▶"
-                        },
+                        format!(
+                            "{} {}",
+                            if is_success { "SUCCESS" } else { "ERROR" },
+                            suffix
+                        ),
                         self.theme.tool_result_style(is_success),
                     ));
+                    if self.is_opened {
+                        self.lines.push(line);
+                        line = Line::default();
+                        let parts = textwrap::wrap(&content, textwrap::Options::new(width.into()));
+                        for part in parts.iter() {
+                            self.lines.push(Line::raw(part.to_string()));
+                        }
+                    }
                 }
             }
             Message::Assistant { content } => {
-                line.spans.push(Span::styled(
-                    "Assistant",
-                    Style::default().fg(Color::from_u32(0x2196F3)),
-                ));
-                line.spans.push(Span::raw(": "));
                 for item in content.iter() {
                     if let AssistantContent::Text(txt) = item {
+                        line.spans.push(Span::styled(
+                            "Assistant",
+                            Style::default().fg(self.theme.assistant),
+                        ));
+                        line.spans.push(Span::raw(": "));
                         let text = if let Some(start_idx) =
                             txt.text.find("<think>").or(txt.text.find("<thinking>"))
                         {
                             let end_idx =
                                 txt.text.find("</think>").or(txt.text.find("</thinking>"));
-                            let suffix = if end_idx.is_some() { "▶" } else { "⯆" };
+                            let suffix = if end_idx.is_some() && !self.is_opened {
+                                "▶"
+                            } else {
+                                "⯆"
+                            };
 
                             line.spans.push(Span::styled(
                                 format!("THINKING {} ", suffix),
                                 self.theme.tool_call_style(),
                             ));
-                            if let Some(end_idx) = end_idx {
+                            if end_idx.is_some_and(|_| !self.is_opened) {
+                                let end_idx = end_idx.unwrap();
                                 let end_idx =
                                     txt.text[end_idx + 1..].find(">").unwrap() + end_idx + 2;
                                 &txt.text[end_idx..]
@@ -110,48 +131,77 @@ impl<'a> MessageWidget<'a> {
                         } else {
                             &txt.text
                         };
-                        let parts = textwrap::wrap(
-                            text,
-                            textwrap::Options::new(width.into()).initial_indent("           "),
-                        );
-                        let first = parts.first().unwrap().to_string().trim_start().to_string();
-                        line.spans.push(Span::raw(first));
-                        for part in parts.iter().skip(1) {
-                            self.lines.push(line);
-                            line = Line::default();
-                            line.spans.push(Span::raw(part.to_string()));
-                        }
+                        self.lines.push(line);
+                        line = Line::default();
+                        let ratskin = ratskin::RatSkin::default();
+                        self.lines
+                            .append(&mut ratskin.parse_text(text.trim_end(), width));
+                        //                        let parts = textwrap::wrap(
+                        //                            text.trim_end(),
+                        //                            textwrap::Options::new(width.into()).initial_indent("           "),
+                        //                        );
+                        //                        let first = parts.first().unwrap().to_string().trim_start().to_string();
+                        //                        line.spans.push(Span::raw(first));
+                        //                        for part in parts.iter().skip(1) {
+                        //                            self.lines.push(line);
+                        //                            line = Line::default();
+                        //                            line.spans.push(Span::raw(part.to_string()));
+                        //                        }
                     }
                     if let AssistantContent::ToolCall(tool_call) = item {
+                        self.is_complete = tool_call.function.name == AttemptCompletionTool::NAME;
                         let args = tool_call.function.arguments.as_object().unwrap();
-                        let tool_params = if args.contains_key("path") {
-                            format!("path: {}", args.get("path").unwrap().as_str().unwrap())
-                        } else if args.contains_key("result") {
-                            format!("result: {}", args.get("result").unwrap())
-                        } else if args.contains_key("command") {
-                            format!("command: {}", args.get("command").unwrap())
-                        } else if args.contains_key("question") {
-                            format!("question: {}", args.get("question").unwrap())
+                        if self.is_complete {
+                            let result = args
+                                .get("result")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            let parts =
+                                textwrap::wrap(result, textwrap::Options::new(width.into()));
+                            for part in parts.iter() {
+                                self.lines.push(Line::styled(
+                                    part.to_string(),
+                                    Style::default().fg(self.theme.assistant),
+                                ));
+                            }
                         } else {
-                            args.iter()
-                                .next()
-                                .map(|(key, value)| format!("{}: {}", key, value))
-                                .unwrap_or_default()
-                        };
-                        let tool_str = format!("{}({})", tool_call.function.name, tool_params);
+                            line.spans.push(Span::styled(
+                                "Assistant",
+                                Style::default().fg(self.theme.assistant),
+                            ));
+                            line.spans.push(Span::raw(": "));
 
-                        let parts = textwrap::wrap(
-                            &tool_str,
-                            textwrap::Options::new(width.into()).initial_indent("           "),
-                        );
-                        let first = parts.first().unwrap().to_string().trim_start().to_string();
-                        line.spans
-                            .push(Span::styled(first, self.theme.tool_call_style()));
-                        for part in parts.iter().skip(1) {
-                            self.lines.push(line);
-                            line = Line::default();
+                            let tool_params = if args.contains_key("path") {
+                                format!("path: {}", args.get("path").unwrap().as_str().unwrap())
+                            } else if args.contains_key("result") {
+                                format!("result: {}", args.get("result").unwrap())
+                            } else if args.contains_key("command") {
+                                format!("command: {}", args.get("command").unwrap())
+                            } else if args.contains_key("question") {
+                                format!("question: {}", args.get("question").unwrap())
+                            } else {
+                                args.iter()
+                                    .next()
+                                    .map(|(key, value)| format!("{}: {}", key, value))
+                                    .unwrap_or_default()
+                            };
+                            let tool_str = format!("{}({})", tool_call.function.name, tool_params);
+
+                            let parts = textwrap::wrap(
+                                &tool_str,
+                                textwrap::Options::new(width.into()).initial_indent("           "),
+                            );
+                            let first = parts.first().unwrap().to_string().trim_start().to_string();
                             line.spans
-                                .push(Span::styled(part.to_string(), self.theme.tool_call_style()));
+                                .push(Span::styled(first, self.theme.tool_call_style()));
+                            for part in parts.iter().skip(1) {
+                                self.lines.push(line);
+                                line = Line::default();
+                                line.spans.push(Span::styled(
+                                    part.to_string(),
+                                    self.theme.tool_call_style(),
+                                ));
+                            }
                         }
                     }
                 }
@@ -163,13 +213,25 @@ impl<'a> MessageWidget<'a> {
     }
 
     pub fn main_axis_size(&self) -> u16 {
-        self.lines.len() as u16
+        if self.is_complete {
+            self.lines.len() as u16 + 2
+        } else {
+            self.lines.len() as u16
+        }
     }
 }
 
 impl Widget for MessageWidget<'_> {
     fn render(mut self, area: Rect, buf: &mut Buffer) {
-        let block = Block::new()
+        let mut block = Block::new();
+        if self.is_complete {
+            block = block
+                .borders(Borders::TOP | Borders::BOTTOM)
+                .title_top(Line::styled("──", self.theme.border_style(false)))
+                .title_top(Line::from("Task Complete").left_aligned())
+                .title_style(Style::default().fg(self.theme.assistant));
+        }
+        block = block
             .padding(Padding::new(2, 1, 0, 0))
             .style(Style::default().bg(if self.is_selected {
                 self.theme.background_highlight

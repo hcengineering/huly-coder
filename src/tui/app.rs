@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::path::PathBuf;
+
 use crate::agent::event::{AgentCommandStatus, AgentTaskStatus};
 use crate::config::Config;
 
@@ -58,11 +61,12 @@ pub struct ModelState {
 pub struct UiState<'a> {
     pub textarea: TextArea<'a>,
     pub focus: FocusedComponent,
-    pub history_scroll_state: ScrollbarState,
     pub terminal_scroll_state: ScrollbarState,
     pub terminal_scroll_position: u16,
     pub tree_state: FileTreeState,
+    pub history_scroll_state: ScrollbarState,
     pub history_state: ListState,
+    pub history_opened_state: HashSet<usize>,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
 }
 
@@ -78,7 +82,7 @@ pub struct App<'a> {
 }
 
 impl UiState<'_> {
-    fn new(workspace: String) -> Self {
+    fn new(workspace: PathBuf) -> Self {
         Self {
             textarea: TextArea::default(),
             focus: FocusedComponent::Input,
@@ -87,6 +91,7 @@ impl UiState<'_> {
             terminal_scroll_position: 0,
             tree_state: FileTreeState::new(workspace),
             history_state: ListState::default(),
+            history_opened_state: HashSet::new(),
             throbber_state: throbber_widgets_tui::ThrobberState::default(),
         }
     }
@@ -97,6 +102,7 @@ impl App<'_> {
         config: Config,
         sender: mpsc::UnboundedSender<agent::AgentControlEvent>,
         receiver: mpsc::UnboundedReceiver<agent::AgentOutputEvent>,
+        messages: Vec<Message>,
     ) -> Self {
         Self {
             ui: UiState::new(config.workspace.clone()),
@@ -105,11 +111,19 @@ impl App<'_> {
             events: UiEventMultiplexer::new(receiver),
             agent_sender: sender,
             theme: Theme::default(),
-            model: ModelState::default(),
+            model: ModelState {
+                messages,
+                ..Default::default()
+            },
         }
     }
 
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
+        if !self.model.messages.is_empty() {
+            self.ui
+                .history_state
+                .select(Some(self.model.messages.len() - 1));
+        }
         while self.running {
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
 
@@ -148,7 +162,11 @@ impl App<'_> {
                                 Self::handle_tree_input(&mut self.ui.tree_state, &event);
                             }
                             FocusedComponent::History => {
-                                Self::handle_list_input(&mut self.ui.history_state, &event);
+                                Self::handle_list_input(
+                                    &mut self.ui.history_state,
+                                    &mut self.ui.history_opened_state,
+                                    &event,
+                                );
                             }
                             FocusedComponent::Terminal => {
                                 Self::handle_scroll_input(
@@ -162,7 +180,6 @@ impl App<'_> {
                 UiEvent::App(app_event) => match app_event {
                     AppEvent::Quit => self.quit(),
                     AppEvent::Agent(evt) => match evt {
-                        AgentOutputEvent::LoadMessages(_messages) => {}
                         AgentOutputEvent::AddMessage(message) => {
                             self.model.messages.push(message);
                             self.ui
@@ -216,7 +233,11 @@ impl App<'_> {
         false
     }
 
-    fn handle_list_input(state: &mut ListState, event: &crossterm::event::Event) {
+    fn handle_list_input(
+        state: &mut ListState,
+        opened_state: &mut HashSet<usize>,
+        event: &crossterm::event::Event,
+    ) {
         if let crossterm::event::Event::Key(key_event) = event {
             if key_event.kind == KeyEventKind::Press {
                 match key_event.code {
@@ -225,6 +246,13 @@ impl App<'_> {
                     }
                     KeyCode::Up => {
                         state.previous();
+                    }
+                    KeyCode::Enter => {
+                        if let Some(selected) = state.selected {
+                            if !opened_state.remove(&selected) {
+                                opened_state.insert(selected);
+                            }
+                        }
                     }
                     _ => {}
                 }

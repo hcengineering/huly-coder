@@ -1,10 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use indoc::formatdoc;
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+
+use crate::tools::workspace_to_string;
+
+use super::normalize_path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListFilesToolArgs {
@@ -13,14 +17,12 @@ pub struct ListFilesToolArgs {
 }
 
 pub struct ListFilesTool {
-    pub workspace_dir: PathBuf,
+    pub workspace: PathBuf,
 }
 
 impl ListFilesTool {
-    pub fn new(workspace_dir: &str) -> Self {
-        Self {
-            workspace_dir: Path::new(workspace_dir).to_path_buf(),
-        }
+    pub fn new(workspace: PathBuf) -> Self {
+        Self { workspace }
     }
 }
 
@@ -45,7 +47,7 @@ impl Tool for ListFilesTool {
                     "path": {
                         "type": "string",
                         "description": formatdoc!{"The path of the directory to list contents for (relative to the current \
-                                                   working directory {})", self.workspace_dir.as_path().to_str().unwrap()},
+                                                   working directory {})", workspace_to_string(&self.workspace)},
                     },
                     "recursive": {
                         "type": "boolean",
@@ -59,18 +61,13 @@ impl Tool for ListFilesTool {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let path = if Path::new(&args.path).is_absolute() {
-            Path::new(&args.path).to_path_buf()
-        } else {
-            self.workspace_dir.join(args.path)
-        };
+        let path = normalize_path(&self.workspace, &args.path);
         let recursive = args.recursive.unwrap_or(false);
         let mut files: Vec<String> = Vec::default();
         for entry in ignore::WalkBuilder::new(path.clone())
             .max_depth(if recursive { None } else { Some(1) })
             .filter_entry(|e| e.file_name() != "node_modules")
             .build()
-            .into_iter()
             .filter_map(|e| e.ok())
         {
             files.push(

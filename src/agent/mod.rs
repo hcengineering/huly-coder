@@ -63,6 +63,7 @@ impl Agent {
         config: Config,
         receiver: mpsc::UnboundedReceiver<AgentControlEvent>,
         sender: mpsc::UnboundedSender<AgentOutputEvent>,
+        messages: Vec<Message>,
     ) -> Self {
         Self {
             config,
@@ -70,7 +71,7 @@ impl Agent {
             sender,
             processing: false,
             agent: None,
-            messages: Vec::new(),
+            messages,
             stream: None,
             assistant_content: None,
             has_completion: false,
@@ -85,13 +86,13 @@ impl Agent {
                 rig::providers::openai::Client::from_env()
                     .agent(&config.model)
                     .preamble(&system_prompt)
-                    .tool(ReadFileTool::new(&config.workspace))
-                    .tool(ListFilesTool::new(&config.workspace))
-                    .tool(WriteToFileTool::new(&config.workspace))
-                    .tool(ExecuteCommandTool::new(&config.workspace))
-                    .tool(ListCodeDefinitionNamesTool::new(&config.workspace))
-                    .tool(ReplaceInFileTool::new(&config.workspace))
-                    .tool(SearchFilesTool::new(&config.workspace))
+                    .tool(ReadFileTool::new(config.workspace.clone()))
+                    .tool(ListFilesTool::new(config.workspace.clone()))
+                    .tool(WriteToFileTool::new(config.workspace.clone()))
+                    .tool(ExecuteCommandTool::new(config.workspace.clone()))
+                    .tool(ListCodeDefinitionNamesTool::new(config.workspace.clone()))
+                    .tool(ReplaceInFileTool::new(config.workspace.clone()))
+                    .tool(SearchFilesTool::new(config.workspace.clone()))
                     .tool(AccessMcpResourceTool)
                     .tool(UseMcpTool)
                     .tool(AskFollowupQuestionTool)
@@ -108,13 +109,13 @@ impl Agent {
                 )
                 .agent(&config.model)
                 .preamble(&system_prompt)
-                .tool(ReadFileTool::new(&config.workspace))
-                .tool(ListFilesTool::new(&config.workspace))
-                .tool(WriteToFileTool::new(&config.workspace))
-                .tool(ExecuteCommandTool::new(&config.workspace))
-                .tool(ListCodeDefinitionNamesTool::new(&config.workspace))
-                .tool(ReplaceInFileTool::new(&config.workspace))
-                .tool(SearchFilesTool::new(&config.workspace))
+                .tool(ReadFileTool::new(config.workspace.clone()))
+                .tool(ListFilesTool::new(config.workspace.clone()))
+                .tool(WriteToFileTool::new(config.workspace.clone()))
+                .tool(ExecuteCommandTool::new(config.workspace.clone()))
+                .tool(ListCodeDefinitionNamesTool::new(config.workspace.clone()))
+                .tool(ReplaceInFileTool::new(config.workspace.clone()))
+                .tool(SearchFilesTool::new(config.workspace.clone()))
                 .tool(AccessMcpResourceTool)
                 .tool(UseMcpTool)
                 .tool(AskFollowupQuestionTool)
@@ -132,13 +133,13 @@ impl Agent {
                 )
                 .agent(&config.model)
                 .preamble(&system_prompt)
-                .tool(ReadFileTool::new(&config.workspace))
-                .tool(ListFilesTool::new(&config.workspace))
-                .tool(WriteToFileTool::new(&config.workspace))
-                .tool(ExecuteCommandTool::new(&config.workspace))
-                .tool(ListCodeDefinitionNamesTool::new(&config.workspace))
-                .tool(ReplaceInFileTool::new(&config.workspace))
-                .tool(SearchFilesTool::new(&config.workspace))
+                .tool(ReadFileTool::new(config.workspace.clone()))
+                .tool(ListFilesTool::new(config.workspace.clone()))
+                .tool(WriteToFileTool::new(config.workspace.clone()))
+                .tool(ExecuteCommandTool::new(config.workspace.clone()))
+                .tool(ListCodeDefinitionNamesTool::new(config.workspace.clone()))
+                .tool(ReplaceInFileTool::new(config.workspace.clone()))
+                .tool(SearchFilesTool::new(config.workspace.clone()))
                 .tool(AccessMcpResourceTool)
                 .tool(UseMcpTool)
                 .tool(AskFollowupQuestionTool)
@@ -254,7 +255,9 @@ impl Agent {
                             .unwrap();
                     }
                     tracing::info!("tool_result: '{}'", tool_result);
-                    if tool_result.is_empty() {
+                    if tool_result.is_empty()
+                        && tool_call.function.name != AttemptCompletionTool::NAME
+                    {
                         tracing::info!(
                             "Stop processing because empty result from tool: {}",
                             tool_call.function.name
@@ -349,7 +352,11 @@ impl Agent {
                     }
                     AgentControlEvent::CancelTask => {
                         tracing::info!("Cancel current task");
-                        self.cancel_task();
+                        if self.processing {
+                            self.cancel_task();
+                        } else if !self.has_completion && !self.messages.is_empty() {
+                            self.processing = true;
+                        }
                     }
                 }
             }

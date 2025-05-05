@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -17,7 +17,7 @@ pub struct Config {
     pub provider_api_key: Option<String>,
     pub provider_base_url: Option<String>,
     pub model: String,
-    pub workspace: String,
+    pub workspace: PathBuf,
     pub user_instructions: String,
 }
 

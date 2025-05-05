@@ -18,6 +18,7 @@ use tracing_subscriber::Layer;
 use self::config::Config;
 use crate::agent::AgentControlEvent;
 use crate::agent::AgentOutputEvent;
+use clap::Parser;
 
 mod agent;
 mod config;
@@ -25,6 +26,14 @@ pub mod providers;
 pub mod templates;
 pub mod tools;
 mod tui;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Skip loading previous session from history.json file
+    #[arg(short, long)]
+    skip_load_messages: bool,
+}
 
 fn init_logger() {
     let writer = tracing_appender::rolling::daily("logs", "huly-coder.log");
@@ -38,6 +47,7 @@ fn init_logger() {
                     tracing_subscriber::filter::Targets::new()
                         .with_target("ignore", tracing::Level::WARN)
                         .with_target("globset", tracing::Level::WARN)
+                        .with_target("hyper_util::client::legacy", tracing::Level::INFO)
                         .with_default(tracing::Level::TRACE),
                 ),
         )
@@ -72,6 +82,8 @@ async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     init_panic_hook();
     init_logger();
+    let args = Args::parse();
+
     tracing::info!("Start");
     let config = Config::new()?;
     // start agent
@@ -79,13 +91,24 @@ async fn main() -> color_eyre::Result<()> {
         tokio::sync::mpsc::unbounded_channel::<AgentOutputEvent>();
     let (control_sender, control_receiver) =
         tokio::sync::mpsc::unbounded_channel::<AgentControlEvent>();
-    let mut agent = agent::Agent::new(config.clone(), control_receiver, output_sender);
+    let history = if !args.skip_load_messages && std::path::Path::new("history.json").exists() {
+        serde_json::from_str(&std::fs::read_to_string("history.json").unwrap()).unwrap()
+    } else {
+        Vec::new()
+    };
+
+    let mut agent = agent::Agent::new(
+        config.clone(),
+        control_receiver,
+        output_sender,
+        history.clone(),
+    );
     tokio::spawn(async move {
         agent.run().await;
     });
 
     let terminal = init_tui().unwrap();
-    let result = tui::App::new(config, control_sender, output_receiver)
+    let result = tui::App::new(config, control_sender, output_receiver, history)
         .run(terminal)
         .await;
     ratatui::restore();

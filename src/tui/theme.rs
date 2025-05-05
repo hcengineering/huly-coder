@@ -34,6 +34,8 @@ pub struct Theme {
     pub status: Color,
     /// Border color for widgets
     pub border: Color,
+    pub assistant: Color,
+    pub user: Color,
 }
 
 impl Theme {
@@ -57,6 +59,8 @@ impl Theme {
         inactive: Color,
         status: Color,
         border: Color,
+        assistant: Color,
+        user: Color,
     ) -> Self {
         Self {
             background,
@@ -76,6 +80,8 @@ impl Theme {
             inactive,
             status,
             border,
+            assistant,
+            user,
         }
     }
 
@@ -84,8 +90,8 @@ impl Theme {
         Self {
             background: Color::Black,
             background_highlight: Color::Indexed(234),
-            panel: Color::Black,
-            panel_shadow: Color::DarkGray,
+            panel: Color::Indexed(236),
+            panel_shadow: Color::Indexed(237),
             text: Color::White,
             inactive_text: Color::Gray,
             tool_call: Color::from_u32(0x6EB4BF),
@@ -99,6 +105,8 @@ impl Theme {
             inactive: Color::DarkGray,
             status: Color::DarkGray,
             border: Color::Indexed(236),
+            assistant: Color::from_u32(0x2196F3),
+            user: Color::from_u32(0x4CAF50),
         }
     }
 
@@ -122,6 +130,8 @@ impl Theme {
             inactive: Color::Gray,
             status: Color::Gray,
             border: Color::DarkGray,
+            assistant: Color::from_u32(0x2196F3),
+            user: Color::from_u32(0x4CAF50),
         }
     }
 

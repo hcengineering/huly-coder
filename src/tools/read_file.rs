@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use indoc::formatdoc;
 use rig::completion::ToolDefinition;
@@ -7,20 +7,20 @@ use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::tools::{normalize_path, workspace_to_string};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadFileToolArgs {
     pub path: String,
 }
 
 pub struct ReadFileTool {
-    pub workspace_dir: PathBuf,
+    pub workspace: PathBuf,
 }
 
 impl ReadFileTool {
-    pub fn new(workspace_dir: &str) -> Self {
-        Self {
-            workspace_dir: Path::new(workspace_dir).to_path_buf(),
-        }
+    pub fn new(workspace: PathBuf) -> Self {
+        Self { workspace }
     }
 }
 
@@ -44,7 +44,7 @@ impl Tool for ReadFileTool {
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": format!("The path of the file to read (relative to the current working directory {})", self.workspace_dir.as_path().to_str().unwrap())
+                        "description": format!("The path of the file to read (relative to the current working directory {})", workspace_to_string(&self.workspace))
                     }
                 },
                 "required": ["path"]
@@ -54,12 +54,8 @@ impl Tool for ReadFileTool {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let path = if Path::new(&args.path).is_absolute() {
-            Path::new(&args.path).to_path_buf()
-        } else {
-            self.workspace_dir.join(&args.path)
-        };
-        tracing::info!("Reading file {}", path.display());
+        let path = normalize_path(&self.workspace, &args.path);
+        tracing::info!("Reading file {}", path);
         fs::read_to_string(path)
     }
 }
