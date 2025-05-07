@@ -2613,8 +2613,8 @@ dependencies = [
 
 [[package]]
 name = "rig-core"
-version = "0.11.1"
-source = "git+https://github.com/kosz78/rig.git?branch=refactor%2Fstreaming#a7c194628f7bccc47ba7461a73f3c1c058754393"
+version = "0.12.0"
+source = "git+https://github.com/kosz78/rig.git?branch=mcp#7c42abbb351caedbd75fa37c62f0848eeb929ef6"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
