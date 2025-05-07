@@ -23,7 +23,15 @@ workspace: ./target/workspace
 #      type: sse
 #      url: http://127.0.0.1:8080/sse
 #      protocol_version: 2024-11-05
-#
+
+#web_search:
+#  type: searx
+#  url: http://localhost:8080/
+
+#web_search:
+#  type: brave
+#  api_key: xxxxxxxxxxxxxxxxxxx
+
 user_instructions: |
   You are dedicated software engineer working alone. You’re free to choose any technology, approach, and solution. 
   If in doubt please choose the best way you think. Your goal is to build working software based on user request.

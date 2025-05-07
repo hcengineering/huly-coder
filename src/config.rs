@@ -40,6 +40,23 @@ pub struct McpConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct WebSearchSearxConfig {
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WebSearchBraveConfig {
+    pub api_key: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum WebSearchProvider {
+    Searx(WebSearchSearxConfig),
+    Brave(WebSearchBraveConfig),
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub provider: ProviderKind,
     pub provider_api_key: Option<String>,
@@ -48,6 +65,7 @@ pub struct Config {
     pub workspace: PathBuf,
     pub user_instructions: String,
     pub mcp: Option<McpConfig>,
+    pub web_search: Option<WebSearchProvider>,
 }
 
 impl Config {

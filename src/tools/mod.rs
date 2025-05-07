@@ -7,6 +7,7 @@ pub mod list_files;
 pub mod read_file;
 pub mod replace_in_file;
 pub mod search_files;
+pub mod web_search;
 pub mod write_to_file;
 
 pub fn create_patch(original: &str, modified: &str) -> String {

@@ -179,6 +179,8 @@ impl<'a> MessageWidget<'a> {
                                 format!("command: {}", args.get("command").unwrap())
                             } else if args.contains_key("question") {
                                 format!("question: {}", args.get("question").unwrap())
+                            } else if args.contains_key("query") {
+                                format!("query: {}", args.get("query").unwrap())
                             } else {
                                 args.iter()
                                     .next()

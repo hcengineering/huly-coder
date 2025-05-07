@@ -1460,6 +1460,7 @@ dependencies = [
  "indoc",
  "itertools 0.14.0",
  "mcp-core",
+ "percent-encoding",
  "ratatui",
  "reqwest",
  "rig-core",

@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::config::McpClientTransport;
 use crate::config::McpConfig;
 use crate::config::ProviderKind;
@@ -11,6 +9,7 @@ use crate::tools::list_files::ListFilesTool;
 use crate::tools::read_file::ReadFileTool;
 use crate::tools::replace_in_file::ReplaceInFileTool;
 use crate::tools::search_files::SearchFilesTool;
+use crate::tools::web_search::WebSearchTool;
 use crate::tools::write_to_file::WriteToFileTool;
 use crate::Config;
 use anyhow::Result;
@@ -85,19 +84,23 @@ impl Agent {
         }
     }
 
-    fn add_static_tools<M>(agent_builder: AgentBuilder<M>, workspace: &Path) -> AgentBuilder<M>
+    fn add_static_tools<M>(agent_builder: AgentBuilder<M>, config: &Config) -> AgentBuilder<M>
     where
         M: CompletionModel,
     {
-        agent_builder
-            .tool(ReadFileTool::new(workspace.to_path_buf()))
-            .tool(ListFilesTool::new(workspace.to_path_buf()))
-            .tool(WriteToFileTool::new(workspace.to_path_buf()))
-            .tool(ExecuteCommandTool::new(workspace.to_path_buf()))
-            .tool(ReplaceInFileTool::new(workspace.to_path_buf()))
-            .tool(SearchFilesTool::new(workspace.to_path_buf()))
+        let mut agent_builder = agent_builder
+            .tool(ReadFileTool::new(config.workspace.to_path_buf()))
+            .tool(ListFilesTool::new(config.workspace.to_path_buf()))
+            .tool(WriteToFileTool::new(config.workspace.to_path_buf()))
+            .tool(ExecuteCommandTool::new(config.workspace.to_path_buf()))
+            .tool(ReplaceInFileTool::new(config.workspace.to_path_buf()))
+            .tool(SearchFilesTool::new(config.workspace.to_path_buf()))
             .tool(AskFollowupQuestionTool)
-            .tool(AttemptCompletionTool)
+            .tool(AttemptCompletionTool);
+        if let Some(web_search) = config.web_search.as_ref() {
+            agent_builder = agent_builder.tool(WebSearchTool::new(web_search.clone()));
+        }
+        agent_builder
     }
 
     async fn add_mcp_tools<M>(
@@ -184,7 +187,7 @@ impl Agent {
                 )
                 .agent(&config.model);
                 agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, &config.workspace);
+                agent_builder = Self::add_static_tools(agent_builder, config);
                 agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
                 Ok(Box::new(agent_builder.build()))
             }
@@ -197,7 +200,7 @@ impl Agent {
                 )
                 .agent(&config.model);
                 agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, &config.workspace);
+                agent_builder = Self::add_static_tools(agent_builder, config);
                 agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
                 Ok(Box::new(agent_builder.build()))
             }
@@ -211,7 +214,7 @@ impl Agent {
                 )
                 .agent(&config.model);
                 agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, &config.workspace);
+                agent_builder = Self::add_static_tools(agent_builder, config);
                 agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
                 Ok(Box::new(agent_builder.build()))
             }
