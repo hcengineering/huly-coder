@@ -81,6 +81,11 @@ impl Tool for ListFilesTool {
                     .to_string(),
             );
         }
-        Ok(files.join("\n"))
+        let res = files.join("\n");
+        if res.is_empty() {
+            Ok("No results found".to_string())
+        } else {
+            Ok(res)
+        }
     }
 }

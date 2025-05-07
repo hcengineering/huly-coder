@@ -89,7 +89,12 @@ impl Tool for SearchFilesTool {
                 printer.sink_with_path(&matcher, entry.path()),
             );
         }
-        Ok(String::from_utf8(buffer).unwrap())
+        let res = String::from_utf8(buffer).unwrap();
+        if res.is_empty() {
+            Ok("No results found".to_string())
+        } else {
+            Ok(res)
+        }
     }
 }
 

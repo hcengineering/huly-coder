@@ -58,10 +58,11 @@ fn init_panic_hook() {
     let original_hook = take_hook();
     set_hook(Box::new(move |panic_info| {
         // intentionally ignore errors here since we're already in a panic
-        tracing::error!("{}", panic_info);
+        let backtrace = std::backtrace::Backtrace::capture();
+        tracing::error!("{}, {:#?}", panic_info, backtrace);
         let _ = restore_tui();
         original_hook(panic_info);
-        panic!();
+        std::process::exit(1);
     }));
 }
 

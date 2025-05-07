@@ -1,19 +1,24 @@
+use std::path::Path;
+
+use crate::config::McpClientTransport;
+use crate::config::McpConfig;
 use crate::config::ProviderKind;
 use crate::providers::HulyAgent;
-use crate::tools::access_mcp_resource::AccessMcpResourceTool;
 use crate::tools::ask_followup_question::AskFollowupQuestionTool;
 use crate::tools::attempt_completion::AttemptCompletionTool;
 use crate::tools::execute_command::ExecuteCommandTool;
-use crate::tools::list_code_definition_names::ListCodeDefinitionNamesTool;
 use crate::tools::list_files::ListFilesTool;
 use crate::tools::read_file::ReadFileTool;
 use crate::tools::replace_in_file::ReplaceInFileTool;
 use crate::tools::search_files::SearchFilesTool;
-use crate::tools::use_mcp_tool::UseMcpTool;
 use crate::tools::write_to_file::WriteToFileTool;
 use crate::Config;
+use anyhow::Result;
 use futures::StreamExt;
+use mcp_core::types::ProtocolVersion;
+use rig::agent::AgentBuilder;
 use rig::completion::CompletionError;
+use rig::completion::CompletionModel;
 use rig::completion::CompletionResponse;
 use rig::message::AssistantContent;
 use rig::message::Message;
@@ -80,73 +85,136 @@ impl Agent {
         }
     }
 
-    fn build_agent(config: &Config, system_prompt: String) -> Box<dyn HulyAgent> {
+    fn add_static_tools<M>(agent_builder: AgentBuilder<M>, workspace: &Path) -> AgentBuilder<M>
+    where
+        M: CompletionModel,
+    {
+        agent_builder
+            .tool(ReadFileTool::new(workspace.to_path_buf()))
+            .tool(ListFilesTool::new(workspace.to_path_buf()))
+            .tool(WriteToFileTool::new(workspace.to_path_buf()))
+            .tool(ExecuteCommandTool::new(workspace.to_path_buf()))
+            .tool(ReplaceInFileTool::new(workspace.to_path_buf()))
+            .tool(SearchFilesTool::new(workspace.to_path_buf()))
+            .tool(AskFollowupQuestionTool)
+            .tool(AttemptCompletionTool)
+    }
+
+    async fn add_mcp_tools<M>(
+        mut agent_builder: AgentBuilder<M>,
+        mcp: Option<&McpConfig>,
+    ) -> Result<AgentBuilder<M>>
+    where
+        M: CompletionModel,
+    {
+        let Some(mcp_config) = mcp else {
+            return Ok(agent_builder);
+        };
+
+        for server_config in mcp_config.servers.values() {
+            match server_config {
+                McpClientTransport::Stdio(config) => {
+                    let transport = mcp_core::transport::ClientStdioTransport::new(
+                        &config.command,
+                        &config.args.iter().map(String::as_str).collect::<Vec<_>>(),
+                    )?;
+                    let mcp_client = mcp_core::client::ClientBuilder::new(transport)
+                        .set_protocol_version(
+                            config
+                                .protocol_version
+                                .clone()
+                                .unwrap_or(ProtocolVersion::V2025_03_26),
+                        )
+                        .build();
+                    mcp_client.open().await?;
+                    mcp_client.initialize().await?;
+                    let tools_list_res = mcp_client.list_tools(None, None).await?;
+
+                    agent_builder = tools_list_res
+                        .tools
+                        .into_iter()
+                        .fold(agent_builder, |builder, tool| {
+                            builder.mcp_tool(tool, mcp_client.clone())
+                        })
+                }
+                McpClientTransport::Sse(config) => {
+                    let mut transport =
+                        mcp_core::transport::ClientSseTransport::builder(config.url.clone());
+                    if let Some(bearer_token) = &config.bearer_token {
+                        transport = transport.with_bearer_token(bearer_token.clone());
+                    }
+                    let mcp_client = mcp_core::client::ClientBuilder::new(transport.build())
+                        .set_protocol_version(
+                            config
+                                .protocol_version
+                                .clone()
+                                .unwrap_or(ProtocolVersion::V2025_03_26),
+                        )
+                        .build();
+                    match mcp_client.open().await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            tracing::error!("Failed to open MCP client: {}", e);
+                            continue;
+                        }
+                    }
+                    mcp_client.initialize().await?;
+                    let tools_list_res = mcp_client.list_tools(None, None).await?;
+
+                    agent_builder = tools_list_res
+                        .tools
+                        .into_iter()
+                        .fold(agent_builder, |builder, tool| {
+                            builder.mcp_tool(tool, mcp_client.clone())
+                        })
+                }
+            }
+        }
+        Ok(agent_builder)
+    }
+
+    async fn build_agent(config: &Config, system_prompt: String) -> Result<Box<dyn HulyAgent>> {
         match config.provider {
-            ProviderKind::OpenAI => Box::new(
-                rig::providers::openai::Client::from_env()
-                    .agent(&config.model)
-                    .preamble(&system_prompt)
-                    .tool(ReadFileTool::new(config.workspace.clone()))
-                    .tool(ListFilesTool::new(config.workspace.clone()))
-                    .tool(WriteToFileTool::new(config.workspace.clone()))
-                    .tool(ExecuteCommandTool::new(config.workspace.clone()))
-                    .tool(ListCodeDefinitionNamesTool::new(config.workspace.clone()))
-                    .tool(ReplaceInFileTool::new(config.workspace.clone()))
-                    .tool(SearchFilesTool::new(config.workspace.clone()))
-                    .tool(AccessMcpResourceTool)
-                    .tool(UseMcpTool)
-                    .tool(AskFollowupQuestionTool)
-                    .tool(AttemptCompletionTool)
-                    .temperature(0.0)
-                    .build(),
-            ),
-            ProviderKind::OpenRouter => Box::new(
-                crate::providers::openrouter::Client::new(
+            ProviderKind::OpenAI => {
+                let mut agent_builder = rig::providers::openai::Client::new(
+                    &config
+                        .provider_api_key
+                        .clone()
+                        .expect("provider_api_key is required for OpenAI"),
+                )
+                .agent(&config.model);
+                agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
+                agent_builder = Self::add_static_tools(agent_builder, &config.workspace);
+                agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
+                Ok(Box::new(agent_builder.build()))
+            }
+            ProviderKind::OpenRouter => {
+                let mut agent_builder = crate::providers::openrouter::Client::new(
                     &config
                         .provider_api_key
                         .clone()
                         .expect("provider_api_key is required for OpenRouter"),
                 )
-                .agent(&config.model)
-                .preamble(&system_prompt)
-                .tool(ReadFileTool::new(config.workspace.clone()))
-                .tool(ListFilesTool::new(config.workspace.clone()))
-                .tool(WriteToFileTool::new(config.workspace.clone()))
-                .tool(ExecuteCommandTool::new(config.workspace.clone()))
-                .tool(ListCodeDefinitionNamesTool::new(config.workspace.clone()))
-                .tool(ReplaceInFileTool::new(config.workspace.clone()))
-                .tool(SearchFilesTool::new(config.workspace.clone()))
-                .tool(AccessMcpResourceTool)
-                .tool(UseMcpTool)
-                .tool(AskFollowupQuestionTool)
-                .tool(AttemptCompletionTool)
-                .temperature(0.0)
-                .build(),
-            ),
-            ProviderKind::LMStudio => Box::new(
-                rig::providers::openai::Client::from_url(
+                .agent(&config.model);
+                agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
+                agent_builder = Self::add_static_tools(agent_builder, &config.workspace);
+                agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
+                Ok(Box::new(agent_builder.build()))
+            }
+            ProviderKind::LMStudio => {
+                let mut agent_builder = rig::providers::openai::Client::from_url(
                     "",
                     &config
                         .provider_base_url
                         .clone()
                         .unwrap_or("http://127.0.0.1:1234/v1".to_string()),
                 )
-                .agent(&config.model)
-                .preamble(&system_prompt)
-                .tool(ReadFileTool::new(config.workspace.clone()))
-                .tool(ListFilesTool::new(config.workspace.clone()))
-                .tool(WriteToFileTool::new(config.workspace.clone()))
-                .tool(ExecuteCommandTool::new(config.workspace.clone()))
-                .tool(ListCodeDefinitionNamesTool::new(config.workspace.clone()))
-                .tool(ReplaceInFileTool::new(config.workspace.clone()))
-                .tool(SearchFilesTool::new(config.workspace.clone()))
-                .tool(AccessMcpResourceTool)
-                .tool(UseMcpTool)
-                .tool(AskFollowupQuestionTool)
-                .tool(AttemptCompletionTool)
-                .temperature(0.0)
-                .build(),
-            ),
+                .agent(&config.model);
+                agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
+                agent_builder = Self::add_static_tools(agent_builder, &config.workspace);
+                agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
+                Ok(Box::new(agent_builder.build()))
+            }
         }
     }
 
@@ -224,8 +292,13 @@ impl Agent {
                         .await
                     {
                         Ok(tool_json_result) => {
-                            // TODO: currently all tools return a string, but this should be more flexible
-                            (serde_json::from_str(&tool_json_result).unwrap(), false)
+                            if tool_json_result.starts_with("\"") {
+                                // TODO: currently all tools return a string, but this should be more flexible
+                                (serde_json::from_str(&tool_json_result).unwrap(), false)
+                            } else {
+                                // raw string response
+                                (tool_json_result, false)
+                            }
                         }
                         Err(e) => {
                             tracing::error!("Error calling tool: {}", e);
@@ -342,7 +415,11 @@ impl Agent {
         );
         let system_prompt =
             prepare_system_prompt(&self.config.workspace, &self.config.user_instructions).await;
-        self.agent = Some(Self::build_agent(&self.config, system_prompt));
+        self.agent = Some(
+            Self::build_agent(&self.config, system_prompt)
+                .await
+                .unwrap(),
+        );
         while !self.sender.is_closed() {
             if let Ok(event) = self.receiver.try_recv() {
                 match event {

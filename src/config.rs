@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use mcp_core::types::ProtocolVersion;
 use serde::Deserialize;
 
 const CONFIG_FILE: &str = "huly-coder.yaml";
@@ -12,6 +14,32 @@ pub enum ProviderKind {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct McpClientStdioTransport {
+    pub command: String,
+    pub args: Vec<String>,
+    pub protocol_version: Option<ProtocolVersion>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct McpClientSseTransport {
+    pub url: String,
+    pub bearer_token: Option<String>,
+    pub protocol_version: Option<ProtocolVersion>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum McpClientTransport {
+    Stdio(McpClientStdioTransport),
+    Sse(McpClientSseTransport),
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct McpConfig {
+    pub servers: HashMap<String, McpClientTransport>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub provider: ProviderKind,
     pub provider_api_key: Option<String>,
@@ -19,6 +47,7 @@ pub struct Config {
     pub model: String,
     pub workspace: PathBuf,
     pub user_instructions: String,
+    pub mcp: Option<McpConfig>,
 }
 
 impl Config {

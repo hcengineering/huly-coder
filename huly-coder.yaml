@@ -11,6 +11,19 @@ model: anthropic/claude-3.5-sonnet
 #provider_api_key: sk-xxxxxxxxxxxxxxxxxxxxx
 #provider_base_url: http://127.0.0.1:1234/v1
 workspace: ./target/workspace
+#mcp:
+#  servers:
+#    # simple MCP server from https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
+#    fetch:
+#      type: stdio
+#      command: docker
+#      args: [ "run", "-i", "--rm", "mcp/fetch", "--ignore-robots-txt" ]
+#      protocol_version: 2024-11-05
+#    weather:
+#      type: sse
+#      url: http://127.0.0.1:8080/sse
+#      protocol_version: 2024-11-05
+#
 user_instructions: |
   You are dedicated software engineer working alone. You’re free to choose any technology, approach, and solution. 
   If in doubt please choose the best way you think. Your goal is to build working software based on user request.
