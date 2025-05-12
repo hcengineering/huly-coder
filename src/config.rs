@@ -57,6 +57,13 @@ pub enum WebSearchProvider {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum WebFetchProvider {
+    Direct,
+    Chrome,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub provider: ProviderKind,
     pub provider_api_key: Option<String>,
@@ -66,6 +73,7 @@ pub struct Config {
     pub user_instructions: String,
     pub mcp: Option<McpConfig>,
     pub web_search: Option<WebSearchProvider>,
+    pub web_fetch: Option<WebFetchProvider>,
 }
 
 impl Config {

@@ -9,6 +9,7 @@ use crate::tools::list_files::ListFilesTool;
 use crate::tools::read_file::ReadFileTool;
 use crate::tools::replace_in_file::ReplaceInFileTool;
 use crate::tools::search_files::SearchFilesTool;
+use crate::tools::web_fetch::WebFetchTool;
 use crate::tools::web_search::WebSearchTool;
 use crate::tools::write_to_file::WriteToFileTool;
 use crate::Config;
@@ -99,6 +100,9 @@ impl Agent {
             .tool(AttemptCompletionTool);
         if let Some(web_search) = config.web_search.as_ref() {
             agent_builder = agent_builder.tool(WebSearchTool::new(web_search.clone()));
+        }
+        if let Some(web_fetch) = config.web_fetch.as_ref() {
+            agent_builder = agent_builder.tool(WebFetchTool::new(web_fetch.clone()).unwrap());
         }
         agent_builder
     }
@@ -330,7 +334,7 @@ impl Agent {
                             }))
                             .unwrap();
                     }
-                    tracing::info!("tool_result: '{}'", tool_result);
+                    tracing::trace!("tool_result: '{}'", tool_result);
                     if tool_result.is_empty()
                         && tool_call.function.name != AttemptCompletionTool::NAME
                     {

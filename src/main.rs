@@ -48,6 +48,9 @@ fn init_logger() {
                         .with_target("ignore", tracing::Level::WARN)
                         .with_target("globset", tracing::Level::WARN)
                         .with_target("hyper_util::client::legacy", tracing::Level::INFO)
+                        .with_target("html5ever", tracing::Level::WARN)
+                        .with_target("tungstenite::protocol", tracing::Level::WARN)
+                        .with_target("headless_chrome", tracing::Level::WARN)
                         .with_default(tracing::Level::TRACE),
                 ),
         )

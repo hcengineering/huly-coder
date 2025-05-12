@@ -120,13 +120,16 @@ impl Tool for WebSearchTool {
                     .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
 
                 let json: SearxResult = serde_json::from_str(&body)?;
+                let converter = htmd::HtmlToMarkdownBuilder::new().build();
                 let result = json
                     .results
                     .into_iter()
                     .map(|item| {
                         format!(
                             "Title: {}\nDescription: {}\nURL: {}",
-                            item.title, item.content, item.url
+                            item.title,
+                            converter.convert(&item.content).unwrap_or(item.content),
+                            item.url
                         )
                     })
                     .join("\n\n");
@@ -163,6 +166,7 @@ impl Tool for WebSearchTool {
                     .await
                     .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
                 let json: BraveResult = serde_json::from_str(&body)?;
+                let converter = htmd::HtmlToMarkdownBuilder::new().build();
                 let result = json
                     .web
                     .results
@@ -170,7 +174,11 @@ impl Tool for WebSearchTool {
                     .map(|item| {
                         format!(
                             "Title: {}\nDescription: {}\nURL: {}",
-                            item.title, item.description, item.url
+                            item.title,
+                            converter
+                                .convert(&item.description)
+                                .unwrap_or(item.description),
+                            item.url
                         )
                     })
                     .join("\n\n");

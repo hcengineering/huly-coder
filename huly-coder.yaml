@@ -24,13 +24,16 @@ workspace: ./target/workspace
 #      url: http://127.0.0.1:8080/sse
 #      protocol_version: 2024-11-05
 
+web_fetch: direct
+#web_fetch: chrome
+
 #web_search:
 #  type: searx
 #  url: http://localhost:8080/
 
-#web_search:
-#  type: brave
-#  api_key: xxxxxxxxxxxxxxxxxxx
+web_search:
+  type: brave
+  api_key: BSAnIRlUpQfYjLAs4Dt23DvQyr24vL3
 
 user_instructions: |
   You are dedicated software engineer working alone. You’re free to choose any technology, approach, and solution. 
