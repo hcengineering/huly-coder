@@ -303,16 +303,18 @@ impl Widget for &mut App<'_> {
             .style(Style::default().bg(theme.background));
 
         let shortcuts_text = Text::from(vec![Line::from(vec![
-            Span::styled("^q", theme.highlight_style()),
-            Span::styled(": Quit | ", theme.inactive_style()),
+            Span::styled("^z", theme.highlight_style()),
+            Span::styled(": New Task | ", theme.inactive_style()),
+            Span::styled("^x", theme.highlight_style()),
+            Span::styled(": Pause/Resume Task | ", theme.inactive_style()),
             Span::styled("⇥", theme.highlight_style()),
             Span::styled(": Change Focus | ", theme.inactive_style()),
             Span::styled("↑↓", theme.highlight_style()),
             Span::styled(": Navigate | ", theme.inactive_style()),
             Span::styled("Enter", theme.highlight_style()),
             Span::styled(": Select | ", theme.inactive_style()),
-            Span::styled("^X", theme.highlight_style()),
-            Span::styled(": Stop/Resume Task ", theme.inactive_style()),
+            Span::styled("^q", theme.highlight_style()),
+            Span::styled(": Quit", theme.inactive_style()),
         ])]);
 
         Paragraph::new(shortcuts_text)

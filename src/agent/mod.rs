@@ -442,6 +442,13 @@ impl Agent {
                             self.processing = true;
                         }
                     }
+                    AgentControlEvent::NewTask => {
+                        tracing::info!("New task");
+                        self.messages.clear();
+                        self.processing = false;
+                        self.has_completion = false;
+                        self.sender.send(AgentOutputEvent::NewTask).ok();
+                    }
                 }
             }
             let prev_processing = self.processing;

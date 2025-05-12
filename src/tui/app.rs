@@ -180,6 +180,12 @@ impl App<'_> {
                 UiEvent::App(app_event) => match app_event {
                     AppEvent::Quit => self.quit(),
                     AppEvent::Agent(evt) => match evt {
+                        AgentOutputEvent::NewTask => {
+                            self.model.messages.clear();
+                            self.ui.history_state.select(None);
+                            self.ui.history_opened_state.clear();
+                            self.ui.focus = FocusedComponent::Input;
+                        }
                         AgentOutputEvent::AddMessage(message) => {
                             self.model.messages.push(message);
                             self.ui
@@ -309,6 +315,11 @@ impl App<'_> {
                 if key_event.modifiers == KeyModifiers::CONTROL =>
             {
                 self.events.send(AppEvent::Quit)
+            }
+            KeyCode::Char('z') | KeyCode::Char('Z')
+                if key_event.modifiers == KeyModifiers::CONTROL =>
+            {
+                self.agent_sender.send(AgentControlEvent::NewTask).unwrap()
             }
             KeyCode::Char('x') if key_event.modifiers == KeyModifiers::CONTROL => self
                 .agent_sender

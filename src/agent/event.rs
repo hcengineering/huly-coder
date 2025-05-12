@@ -17,6 +17,7 @@ pub struct AgentCommandStatus {
 pub enum AgentOutputEvent {
     AddMessage(Message),
     UpdateMessage(Message),
+    NewTask,
     Error(String),
     ExecuteCommand(AgentCommandStatus),
     TaskStatus(AgentTaskStatus),
@@ -27,4 +28,5 @@ pub enum AgentOutputEvent {
 pub enum AgentControlEvent {
     SendMessage(String),
     CancelTask,
+    NewTask,
 }
