@@ -110,16 +110,8 @@ impl Tool for WebSearchTool {
                     utf8_percent_encode(&args.query, NON_ALPHANUMERIC),
                     args.offset + 1
                 );
-                let response = self
-                    .client
-                    .get(url)
-                    .send()
-                    .await
-                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
-                let body = response
-                    .text()
-                    .await
-                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+                let response = self.client.get(url).send().await?;
+                let body = response.text().await?;
 
                 let json: SearxResult = serde_json::from_str(&body)?;
                 let converter = htmd::HtmlToMarkdownBuilder::new().build();
@@ -151,8 +143,7 @@ impl Tool for WebSearchTool {
                     .header("Accept", "application/json")
                     .header("X-Subscription-Token", &search_config.api_key)
                     .send()
-                    .await
-                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+                    .await?;
                 if response.status() != 200 {
                     return Err(AgentToolError::Other(anyhow::anyhow!(
                         "Unexpected status code: {}: {}",
