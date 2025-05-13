@@ -8,6 +8,8 @@ use serde_json::json;
 
 use crate::config::WebSearchProvider;
 
+use super::AgentToolError;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebSearchToolArgs {
     pub query: String,
@@ -62,7 +64,7 @@ impl WebSearchTool {
 impl Tool for WebSearchTool {
     const NAME: &'static str = "web_search";
 
-    type Error = std::io::Error;
+    type Error = AgentToolError;
     type Args = WebSearchToolArgs;
     type Output = String;
 
@@ -152,14 +154,11 @@ impl Tool for WebSearchTool {
                     .await
                     .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
                 if response.status() != 200 {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!(
-                            "Unexpected status code: {}: {}",
-                            response.status(),
-                            response.text().await.unwrap()
-                        ),
-                    ));
+                    return Err(AgentToolError::Other(anyhow::anyhow!(
+                        "Unexpected status code: {}: {}",
+                        response.status(),
+                        response.text().await.unwrap()
+                    )));
                 }
                 let body = response
                     .text()

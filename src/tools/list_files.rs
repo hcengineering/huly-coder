@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::tools::workspace_to_string;
 
-use super::normalize_path;
+use super::{normalize_path, AgentToolError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListFilesToolArgs {
@@ -29,7 +29,7 @@ impl ListFilesTool {
 impl Tool for ListFilesTool {
     const NAME: &'static str = "list_files";
 
-    type Error = std::io::Error;
+    type Error = AgentToolError;
     type Args = ListFilesToolArgs;
     type Output = String;
 

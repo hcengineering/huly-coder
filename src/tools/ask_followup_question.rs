@@ -4,6 +4,8 @@ use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use super::AgentToolError;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AskFollowupQuestionToolArgs {
     pub question: String,
@@ -15,7 +17,7 @@ pub struct AskFollowupQuestionTool;
 impl Tool for AskFollowupQuestionTool {
     const NAME: &'static str = "ask_followup_question";
 
-    type Error = std::io::Error;
+    type Error = AgentToolError;
     type Args = AskFollowupQuestionToolArgs;
     type Output = String;
 

@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use crate::tools::{create_patch, normalize_path, workspace_to_string};
 
+use super::AgentToolError;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WriteToFileToolArgs {
     pub path: String,
@@ -27,7 +29,7 @@ impl WriteToFileTool {
 impl Tool for WriteToFileTool {
     const NAME: &'static str = "write_to_file";
 
-    type Error = std::io::Error;
+    type Error = AgentToolError;
     type Args = WriteToFileToolArgs;
     type Output = String;
 

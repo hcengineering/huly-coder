@@ -9,6 +9,8 @@ use serde_json::json;
 
 use crate::tools::{normalize_path, workspace_to_string};
 
+use super::AgentToolError;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadFileToolArgs {
     pub path: String,
@@ -27,7 +29,7 @@ impl ReadFileTool {
 impl Tool for ReadFileTool {
     const NAME: &'static str = "read_file";
 
-    type Error = std::io::Error;
+    type Error = AgentToolError;
     type Args = ReadFileToolArgs;
     type Output = String;
 
@@ -56,6 +58,6 @@ impl Tool for ReadFileTool {
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         let path = normalize_path(&self.workspace, &args.path);
         tracing::info!("Reading file {}", path);
-        fs::read_to_string(path)
+        Ok(fs::read_to_string(path)?)
     }
 }

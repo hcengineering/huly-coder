@@ -4,8 +4,7 @@ use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-#[derive(Debug, thiserror::Error)]
-pub enum AttemptCompletionError {}
+use super::AgentToolError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AttemptCompletionArgs {
@@ -18,7 +17,7 @@ pub struct AttemptCompletionTool;
 impl Tool for AttemptCompletionTool {
     const NAME: &'static str = "attempt_completion";
 
-    type Error = AttemptCompletionError;
+    type Error = AgentToolError;
     type Args = AttemptCompletionArgs;
     type Output = String;
 

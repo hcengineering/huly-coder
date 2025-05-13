@@ -10,16 +10,6 @@ use serde_json::json;
 
 use crate::tools::{create_patch, normalize_path, workspace_to_string};
 
-//#[derive(Debug, thiserror::Error)]
-//pub enum ReplaceInFileError {
-//    #[error("Replace in file error: {0}")]
-//    ReplaceError(#[from] std::io::Error),
-//    #[error("Incorrect parameters error: {0}")]
-//    ParametersError(String),
-//    #[error("Search string not found: {0}")]
-//    SearchNotFound(String),
-//}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplaceInFileToolArgs {
     pub path: String,

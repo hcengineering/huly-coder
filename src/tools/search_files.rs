@@ -12,6 +12,8 @@ use serde_json::json;
 
 use crate::tools::{normalize_path, workspace_to_string};
 
+use super::AgentToolError;
+
 pub struct SearchFilesTool {
     pub workspace: PathBuf,
 }
@@ -32,7 +34,7 @@ impl SearchFilesTool {
 impl Tool for SearchFilesTool {
     const NAME: &'static str = "search_files";
 
-    type Error = std::io::Error;
+    type Error = AgentToolError;
     type Args = SearchFilesToolArgs;
     type Output = String;
 

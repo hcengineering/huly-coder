@@ -7,15 +7,7 @@ use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::workspace_to_string;
-
-#[derive(Debug, thiserror::Error)]
-pub enum ExecuteCommandError {
-    #[error("Execute command error: {0}")]
-    ExecuteError(#[from] std::io::Error),
-    #[error("Incorrect parameters error: {0}")]
-    ParametersError(String),
-}
+use super::{workspace_to_string, AgentToolError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteCommandToolArgs {
@@ -36,7 +28,7 @@ impl ExecuteCommandTool {
 impl Tool for ExecuteCommandTool {
     const NAME: &'static str = "execute_command";
 
-    type Error = ExecuteCommandError;
+    type Error = AgentToolError;
     type Args = ExecuteCommandToolArgs;
     type Output = String;
 
@@ -82,7 +74,8 @@ impl Tool for ExecuteCommandTool {
         } else {
             Command::new("bash")
         };
-        cmd.current_dir(workspace_to_string(&self.workspace))
+        Ok(cmd
+            .current_dir(workspace_to_string(&self.workspace))
             .arg(if cfg!(target_os = "windows") {
                 "/C"
             } else {
@@ -96,7 +89,6 @@ impl Tool for ExecuteCommandTool {
                     String::from_utf8(output.stderr).unwrap_or_else(|_| "".to_string()),
                     String::from_utf8(output.stdout).unwrap_or_else(|_| "".to_string())
                 )
-            })
-            .map_err(ExecuteCommandError::ExecuteError)
+            })?)
     }
 }
