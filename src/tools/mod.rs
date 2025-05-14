@@ -6,6 +6,7 @@ pub mod ask_followup_question;
 pub mod attempt_completion;
 pub mod execute_command;
 pub mod list_files;
+pub mod memory;
 pub mod read_file;
 pub mod replace_in_file;
 pub mod search_files;

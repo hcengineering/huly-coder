@@ -2,6 +2,8 @@ debug/
 target/
 logs/
 .vscode/
-history.json
 **/*.rs.bk
 *.pdb
+history.json
+/memory.yaml
+/.fastembed_cache/

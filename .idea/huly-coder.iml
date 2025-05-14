@@ -2,8 +2,10 @@
 <module type="EMPTY_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <excludePattern pattern="history.json" />
+      <excludeFolder url="file://$MODULE_DIR$/.fastembed_cache" />
+      <excludeFolder url="file://$MODULE_DIR$/memory.yaml" />
       <excludePattern pattern="*.pdb" />
+      <excludePattern pattern="history.json" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

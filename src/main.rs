@@ -51,6 +51,7 @@ fn init_logger() {
                         .with_target("html5ever", tracing::Level::WARN)
                         .with_target("tungstenite::protocol", tracing::Level::WARN)
                         .with_target("headless_chrome", tracing::Level::WARN)
+                        .with_target("mio", tracing::Level::WARN)
                         .with_default(tracing::Level::TRACE),
                 ),
         )

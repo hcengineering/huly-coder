@@ -3,8 +3,11 @@ use std::fs;
 use std::path::Path;
 
 use rig::message::{Message, UserContent};
+use rig::vector_store::in_memory_store::InMemoryVectorIndex;
+use rig::vector_store::VectorStoreIndex;
 
 use crate::templates::{ENV_DETAILS, SYSTEM_PROMPT};
+use crate::tools::memory::Entity;
 
 pub const MAX_FILES: usize = 10000;
 
@@ -32,13 +35,16 @@ pub async fn prepare_system_prompt(workspace_dir: &Path, user_instructions: &str
             ("OS_SHELL_EXECUTABLE", &get_shell_path()),
             ("USER_HOME_DIR", dirs::home_dir().unwrap().to_str().unwrap()),
             ("USER_INSTRUCTION", user_instructions),
-            ("MCP_SECTION", ""),
         ]),
     )
     .unwrap()
 }
 
-pub fn add_env_message<'a>(msg: &'a mut Message, workspace: &'a Path) {
+pub async fn add_env_message<'a>(
+    msg: &'a mut Message,
+    memory_index: Option<&'a InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>,
+    workspace: &'a Path,
+) {
     let workspace = workspace.as_os_str().to_str().unwrap().replace("\\", "/");
     let mut files: Vec<String> = Vec::default();
 
@@ -66,12 +72,23 @@ pub fn add_env_message<'a>(msg: &'a mut Message, workspace: &'a Path) {
         &files_str
     };
     if let Message::User { content } = msg {
+        let text = content.first();
+        let mut memory_entries = String::new();
+        if let Some(memory_index) = memory_index {
+            if let UserContent::Text(text) = text {
+                let res: Vec<(f64, String, Entity)> =
+                    memory_index.top_n(&text.text, 10).await.unwrap();
+                let result: Vec<_> = res.into_iter().map(|(_, _, entity)| entity).collect();
+                memory_entries = serde_yaml::to_string(&result).unwrap();
+            }
+        }
         content.push(UserContent::text(
             subst::substitute(
                 ENV_DETAILS,
                 &HashMap::from([
                     ("TIME", chrono::Local::now().to_rfc2822().as_str()),
                     ("WORKING_DIR", &workspace),
+                    ("MEMORY_ENTRIES", &memory_entries),
                     ("FILES", files),
                 ]),
             )
