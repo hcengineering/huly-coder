@@ -150,9 +150,10 @@ impl<'a> MessageWidget<'a> {
                     }
                     if let AssistantContent::ToolCall(tool_call) = item {
                         self.is_complete = tool_call.function.name == AttemptCompletionTool::NAME;
-                        let args = tool_call.function.arguments.as_object().unwrap();
+                        let args = tool_call.function.arguments.as_object();
                         if self.is_complete {
                             let result = args
+                                .unwrap()
                                 .get("result")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or_default();
@@ -171,25 +172,29 @@ impl<'a> MessageWidget<'a> {
                             ));
                             line.spans.push(Span::raw(": "));
 
-                            let tool_params = if args.contains_key("path") {
-                                format!("path: {}", args.get("path").unwrap().as_str().unwrap())
-                            } else if args.contains_key("result") {
-                                format!("result: {}", args.get("result").unwrap())
-                            } else if args.contains_key("command") {
-                                format!("command: {}", args.get("command").unwrap())
-                            } else if args.contains_key("question") {
-                                format!("question: {}", args.get("question").unwrap())
-                            } else if args.contains_key("query") {
-                                format!("query: {}", args.get("query").unwrap())
-                            } else if args.contains_key("url") {
-                                format!("url: {}", args.get("url").unwrap())
+                            let tool_str = if let Some(args) = args {
+                                let tool_params = if args.contains_key("path") {
+                                    format!("path: {}", args.get("path").unwrap().as_str().unwrap())
+                                } else if args.contains_key("result") {
+                                    format!("result: {}", args.get("result").unwrap())
+                                } else if args.contains_key("command") {
+                                    format!("command: {}", args.get("command").unwrap())
+                                } else if args.contains_key("question") {
+                                    format!("question: {}", args.get("question").unwrap())
+                                } else if args.contains_key("query") {
+                                    format!("query: {}", args.get("query").unwrap())
+                                } else if args.contains_key("url") {
+                                    format!("url: {}", args.get("url").unwrap())
+                                } else {
+                                    args.iter()
+                                        .next()
+                                        .map(|(key, value)| format!("{}: {}", key, value))
+                                        .unwrap_or_default()
+                                };
+                                format!("{}({})", tool_call.function.name, tool_params)
                             } else {
-                                args.iter()
-                                    .next()
-                                    .map(|(key, value)| format!("{}: {}", key, value))
-                                    .unwrap_or_default()
+                                tool_call.function.name.to_string()
                             };
-                            let tool_str = format!("{}({})", tool_call.function.name, tool_params);
 
                             let parts = textwrap::wrap(
                                 &tool_str,

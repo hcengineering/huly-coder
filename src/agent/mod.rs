@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::RwLock;
+
 use crate::config::McpClientTransport;
 use crate::config::McpConfig;
 use crate::config::ProviderKind;
@@ -6,6 +9,9 @@ use crate::tools::ask_followup_question::AskFollowupQuestionTool;
 use crate::tools::attempt_completion::AttemptCompletionTool;
 use crate::tools::execute_command::ExecuteCommandTool;
 use crate::tools::list_files::ListFilesTool;
+use crate::tools::memory;
+use crate::tools::memory::Entity;
+use crate::tools::memory::MemoryManager;
 use crate::tools::read_file::ReadFileTool;
 use crate::tools::replace_in_file::ReplaceInFileTool;
 use crate::tools::search_files::SearchFilesTool;
@@ -20,6 +26,7 @@ use rig::agent::AgentBuilder;
 use rig::completion::CompletionError;
 use rig::completion::CompletionModel;
 use rig::completion::CompletionResponse;
+use rig::embeddings::EmbeddingsBuilder;
 use rig::message::AssistantContent;
 use rig::message::Message;
 use rig::message::ToolResultContent;
@@ -28,6 +35,8 @@ use rig::streaming::StreamingCompletionResponse;
 use rig::tool::Tool;
 use rig::tool::ToolError;
 use rig::tool::ToolSetError;
+use rig::vector_store::in_memory_store::InMemoryVectorIndex;
+use rig::vector_store::in_memory_store::InMemoryVectorStore;
 use rig::OneOrMany;
 use tokio::sync::mpsc;
 
@@ -50,6 +59,8 @@ pub struct Agent {
     stream:
         Option<StreamingCompletionResponse<rig::providers::openai::StreamingCompletionResponse>>,
     assistant_content: Option<String>,
+    memory: Arc<RwLock<MemoryManager>>,
+    memory_index: Option<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>,
     has_completion: bool,
     pending_tool_id: Option<String>,
     current_tokens: u32,
@@ -82,10 +93,29 @@ impl Agent {
             has_completion: false,
             pending_tool_id: None,
             current_tokens: 0,
+            memory: Arc::new(RwLock::new(MemoryManager::new(false))),
+            memory_index: None,
         }
     }
+    async fn init_memory_index(&mut self) {
+        let documents = self.memory.read().unwrap().entities().clone();
+        let client = rig_fastembed::Client::new();
+        let model = client.embedding_model(&rig_fastembed::FastembedModel::AllMiniLML6V2);
+        let embeddings = EmbeddingsBuilder::new(model.clone())
+            .documents(documents)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+        let index_store = InMemoryVectorStore::from_documents(embeddings.into_iter()).index(model);
+        self.memory_index = Some(index_store);
+    }
 
-    fn add_static_tools<M>(agent_builder: AgentBuilder<M>, config: &Config) -> AgentBuilder<M>
+    fn add_static_tools<M>(
+        agent_builder: AgentBuilder<M>,
+        config: &Config,
+        memory: Arc<RwLock<MemoryManager>>,
+    ) -> AgentBuilder<M>
     where
         M: CompletionModel,
     {
@@ -104,6 +134,8 @@ impl Agent {
         if let Some(web_fetch) = config.web_fetch.as_ref() {
             agent_builder = agent_builder.tool(WebFetchTool::new(web_fetch.clone()).unwrap());
         }
+        agent_builder = memory::add_memory_tools(agent_builder, memory);
+
         agent_builder
     }
 
@@ -180,7 +212,11 @@ impl Agent {
         Ok(agent_builder)
     }
 
-    async fn build_agent(config: &Config, system_prompt: String) -> Result<Box<dyn HulyAgent>> {
+    async fn build_agent(
+        config: &Config,
+        memory: Arc<RwLock<MemoryManager>>,
+        system_prompt: String,
+    ) -> Result<Box<dyn HulyAgent>> {
         match config.provider {
             ProviderKind::OpenAI => {
                 let mut agent_builder = rig::providers::openai::Client::new(
@@ -191,7 +227,7 @@ impl Agent {
                 )
                 .agent(&config.model);
                 agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, config);
+                agent_builder = Self::add_static_tools(agent_builder, config, memory);
                 agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
                 Ok(Box::new(agent_builder.build()))
             }
@@ -204,7 +240,7 @@ impl Agent {
                 )
                 .agent(&config.model);
                 agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, config);
+                agent_builder = Self::add_static_tools(agent_builder, config, memory);
                 agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
                 Ok(Box::new(agent_builder.build()))
             }
@@ -218,7 +254,7 @@ impl Agent {
                 )
                 .agent(&config.model);
                 agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, config);
+                agent_builder = Self::add_static_tools(agent_builder, config, memory);
                 agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
                 Ok(Box::new(agent_builder.build()))
             }
@@ -375,7 +411,7 @@ impl Agent {
                                 OneOrMany::one(ToolResultContent::text(tool_result)),
                             )),
                         };
-                        add_env_message(&mut result_message, &self.config.workspace);
+                        add_env_message(&mut result_message, None, &self.config.workspace).await;
                         self.add_message(result_message);
                         if tool_call.function.name == AttemptCompletionTool::NAME {
                             self.has_completion = true;
@@ -423,16 +459,17 @@ impl Agent {
         let system_prompt =
             prepare_system_prompt(&self.config.workspace, &self.config.user_instructions).await;
         self.agent = Some(
-            Self::build_agent(&self.config, system_prompt)
+            Self::build_agent(&self.config, self.memory.clone(), system_prompt)
                 .await
                 .unwrap(),
         );
+        self.init_memory_index().await;
         while !self.sender.is_closed() {
             if let Ok(event) = self.receiver.try_recv() {
                 match event {
                     AgentControlEvent::SendMessage(message) => {
                         tracing::info!("Send message: {}", message);
-                        self.send_message(message);
+                        self.send_message(message).await;
                     }
                     AgentControlEvent::CancelTask => {
                         tracing::info!("Cancel current task");
@@ -448,6 +485,7 @@ impl Agent {
                         self.processing = false;
                         self.has_completion = false;
                         self.sender.send(AgentOutputEvent::NewTask).ok();
+                        persist_history(&self.messages);
                     }
                 }
             }
@@ -475,7 +513,7 @@ impl Agent {
         tracing::info!("Stop agent");
     }
 
-    fn send_message(&mut self, message: String) {
+    async fn send_message(&mut self, message: String) {
         let mut message = if let Some(tool_id) = self.pending_tool_id.take() {
             Message::User {
                 content: OneOrMany::one(UserContent::tool_result(
@@ -486,7 +524,12 @@ impl Agent {
         } else {
             Message::user(message)
         };
-        add_env_message(&mut message, &self.config.workspace);
+        add_env_message(
+            &mut message,
+            self.memory_index.as_ref(),
+            &self.config.workspace,
+        )
+        .await;
         self.add_message(message);
         self.processing = true;
         self.has_completion = false;
