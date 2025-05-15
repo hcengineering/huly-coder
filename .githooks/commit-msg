@@ -1,7 +1,7 @@
 #!/bin/sh
 
 #echo "$(grep -E '^(feat|fix|chore|docs|test|style|refactor)(\(.+?\))?: .{1,}$' $1)"
-test "" != "$(grep -E '^(feat|fix|chore|docs|test|style|refactor)(\(.+?\))?: .{1,}$' $1)" || {
+test "" != "$(grep -E '^(Merge branch|feat|fix|chore|docs|test|style|refactor)(\(.+?\))?:? .{1,}$' $1)" || {
 	cat <<\EOF
 Aborting commit. Your commit message is invalid.
 
