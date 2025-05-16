@@ -1,3 +1,5 @@
+// Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
+
 #[cfg(test)]
 mod tests {
     use crate::tools::memory::*;

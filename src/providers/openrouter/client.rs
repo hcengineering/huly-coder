@@ -1,3 +1,4 @@
+//! Modified version of rig::agent::providers::openrouter
 use rig::agent::AgentBuilder;
 use rig::extractor::ExtractorBuilder;
 use schemars::JsonSchema;

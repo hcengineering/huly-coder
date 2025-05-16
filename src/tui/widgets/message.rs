@@ -1,3 +1,4 @@
+// Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use itertools::Itertools;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;

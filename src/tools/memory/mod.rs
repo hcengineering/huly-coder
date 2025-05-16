@@ -1,6 +1,7 @@
 ///
 /// Based on https://github.com/modelcontextprotocol/servers/tree/main/src/memory MCP server
 ///
+// Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::collections::HashSet;
 use std::fs;
 use std::sync::{Arc, RwLock};

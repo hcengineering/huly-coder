@@ -1,3 +1,4 @@
+// Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::io;
 use std::io::stdout;
 use std::panic::set_hook;
@@ -52,6 +53,8 @@ fn init_logger() {
                         .with_target("tungstenite::protocol", tracing::Level::WARN)
                         .with_target("headless_chrome", tracing::Level::WARN)
                         .with_target("mio", tracing::Level::WARN)
+                        .with_target("ort", tracing::Level::WARN)
+                        .with_target("tokenizers", tracing::Level::WARN)
                         .with_default(tracing::Level::TRACE),
                 ),
         )

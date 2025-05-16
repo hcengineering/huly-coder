@@ -1,3 +1,4 @@
+// Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;

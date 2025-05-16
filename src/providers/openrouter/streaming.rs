@@ -1,3 +1,4 @@
+//! Modified version of rig::agent::providers::openrouter
 use std::collections::HashMap;
 
 use async_stream::stream;

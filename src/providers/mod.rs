@@ -1,3 +1,4 @@
+// Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use async_trait::async_trait;
 use rig::agent::Agent;
 use rig::completion::CompletionError;

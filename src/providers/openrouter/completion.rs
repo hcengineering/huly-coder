@@ -1,3 +1,4 @@
+//! Modified version of rig::agent::providers::openrouter
 use serde::Deserialize;
 
 use crate::providers::openrouter::merge;

@@ -1,3 +1,4 @@
+// Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use rig::message::Message;
 
 #[derive(Clone, Debug, Default)]

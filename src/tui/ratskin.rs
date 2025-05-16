@@ -1,3 +1,5 @@
+/// Modified version of https://docs.rs/ratskin/latest/src/ratskin/lib.rs.html#1-317
+/// Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use crossterm::style::Attribute;
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};

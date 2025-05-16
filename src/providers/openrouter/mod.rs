@@ -1,3 +1,4 @@
+//! Modified version of rig::agent::providers::openrouter
 //! OpenRouter Inference API client and Rig integration
 //!
 //! # Example
