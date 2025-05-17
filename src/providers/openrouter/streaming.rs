@@ -167,6 +167,7 @@ pub async fn send_streaming_request(
                 }
             };
 
+            //tracing::trace!("OpenRouter response: {}", text);
             for line in text.lines() {
                 let mut line = line.to_string();
 
@@ -199,6 +200,9 @@ pub async fn send_streaming_request(
                 let data = match serde_json::from_str::<StreamingCompletionResponse>(&line) {
                     Ok(data) => data,
                     Err(_) => {
+                        if line.contains("\"error\"") {
+                           yield Err(CompletionError::ResponseError(line));
+                        }
                         continue;
                     }
                 };

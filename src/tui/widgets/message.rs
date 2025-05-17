@@ -9,7 +9,7 @@ use rig::message::{AssistantContent, Message, ToolResultContent, UserContent};
 use rig::tool::Tool;
 
 use crate::tools::attempt_completion::AttemptCompletionTool;
-use crate::tui::{ratskin, Theme};
+use crate::tui::{ratskin, tool_info, Theme};
 
 #[derive(Debug, Clone)]
 pub struct MessageWidget<'a> {
@@ -173,32 +173,15 @@ impl<'a> MessageWidget<'a> {
                             ));
                             line.spans.push(Span::raw(": "));
 
-                            let tool_str = if let Some(args) = args {
-                                let tool_params = if args.contains_key("path") {
-                                    format!("path: {}", args.get("path").unwrap().as_str().unwrap())
-                                } else if args.contains_key("result") {
-                                    format!("result: {}", args.get("result").unwrap())
-                                } else if args.contains_key("command") {
-                                    format!("command: {}", args.get("command").unwrap())
-                                } else if args.contains_key("question") {
-                                    format!("question: {}", args.get("question").unwrap())
-                                } else if args.contains_key("query") {
-                                    format!("query: {}", args.get("query").unwrap())
-                                } else if args.contains_key("url") {
-                                    format!("url: {}", args.get("url").unwrap())
-                                } else {
-                                    args.iter()
-                                        .next()
-                                        .map(|(key, value)| format!("{}: {}", key, value))
-                                        .unwrap_or_default()
-                                };
-                                format!("{}({})", tool_call.function.name, tool_params)
-                            } else {
-                                tool_call.function.name.to_string()
-                            };
+                            let (tool_icon, tool_info) = tool_info::get_tool_call_info(
+                                &tool_call.function.name,
+                                &tool_call.function.arguments,
+                            );
+                            line.spans.push(Span::raw(tool_icon));
+                            line.spans.push(Span::raw(" "));
 
                             let parts = textwrap::wrap(
-                                &tool_str,
+                                &tool_info,
                                 textwrap::Options::new(width.into()).initial_indent("           "),
                             );
                             let first = parts.first().unwrap().to_string().trim_start().to_string();

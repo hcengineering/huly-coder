@@ -6,6 +6,7 @@
       <excludeFolder url="file://$MODULE_DIR$/memory.yaml" />
       <excludePattern pattern="*.pdb" />
       <excludePattern pattern="history.json" />
+      <excludePattern pattern="huly-coder-local.yaml" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

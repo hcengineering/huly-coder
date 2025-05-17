@@ -98,7 +98,14 @@ pub async fn add_env_message<'a>(
     }
 }
 
-pub fn persist_history(messages: &Vec<Message>) {
+pub fn is_last_user_message(messages: &[Message]) -> bool {
+    if messages.is_empty() {
+        return false;
+    }
+    matches!(messages.last().unwrap(), Message::User { .. })
+}
+
+pub fn persist_history(messages: &[Message]) {
     fs::write(
         "history.json",
         serde_json::to_string_pretty(messages).unwrap(),

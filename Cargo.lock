@@ -1843,6 +1843,7 @@ dependencies = [
  "grep-regex",
  "grep-searcher",
  "headless_chrome",
+ "heck",
  "htmd",
  "ignore",
  "indicium",

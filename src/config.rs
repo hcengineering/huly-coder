@@ -6,6 +6,7 @@ use mcp_core::types::ProtocolVersion;
 use serde::Deserialize;
 
 const CONFIG_FILE: &str = "huly-coder.yaml";
+const LOCAL_CONFIG_FILE: &str = "huly-coder-local.yaml";
 
 #[derive(Debug, Deserialize, Clone)]
 pub enum ProviderKind {
@@ -82,6 +83,12 @@ impl Config {
         let mut builder = config::Config::builder()
             .add_source(config::File::with_name(CONFIG_FILE))
             .add_source(config::Environment::with_prefix("HULY_CODER"));
+
+        if Path::new(LOCAL_CONFIG_FILE).exists() {
+            tracing::info!("Found local config at {}", LOCAL_CONFIG_FILE);
+            builder = builder.add_source(config::File::with_name(LOCAL_CONFIG_FILE));
+        }
+
         let user_config = format!(
             "{}/{}",
             dirs::home_dir().unwrap().to_str().unwrap(),

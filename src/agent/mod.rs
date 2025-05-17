@@ -47,12 +47,12 @@ pub use event::AgentControlEvent;
 pub use event::AgentOutputEvent;
 
 use self::event::AgentCommandStatus;
-use self::event::AgentTaskStatus;
+use self::event::AgentState;
+use self::event::AgentStatus;
 use self::utils::*;
 
 pub struct Agent {
     config: Config,
-    processing: bool,
     receiver: mpsc::UnboundedReceiver<AgentControlEvent>,
     sender: mpsc::UnboundedSender<AgentOutputEvent>,
     agent: Option<Box<dyn HulyAgent>>,
@@ -62,9 +62,9 @@ pub struct Agent {
     assistant_content: Option<String>,
     memory: Arc<RwLock<MemoryManager>>,
     memory_index: Option<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>,
-    has_completion: bool,
     pending_tool_id: Option<String>,
     current_tokens: u32,
+    state: AgentState,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -86,16 +86,15 @@ impl Agent {
             config,
             receiver,
             sender,
-            processing: false,
             agent: None,
             messages,
             stream: None,
             assistant_content: None,
-            has_completion: false,
             pending_tool_id: None,
             current_tokens: 0,
             memory: Arc::new(RwLock::new(MemoryManager::new(false))),
             memory_index: None,
+            state: AgentState::Paused,
         }
     }
     async fn init_memory_index(&mut self) {
@@ -213,6 +212,22 @@ impl Agent {
         Ok(agent_builder)
     }
 
+    async fn configure_agent<M>(
+        mut agent_builder: AgentBuilder<M>,
+        config: &Config,
+        system_prompt: String,
+        memory: Arc<RwLock<MemoryManager>>,
+    ) -> Result<AgentBuilder<M>>
+    where
+        M: CompletionModel,
+    {
+        agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
+        agent_builder = Self::add_static_tools(agent_builder, config, memory);
+        agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
+        Ok(agent_builder)
+    }
+
+    // TODO: refactor to use self
     async fn build_agent(
         config: &Config,
         memory: Arc<RwLock<MemoryManager>>,
@@ -220,33 +235,35 @@ impl Agent {
     ) -> Result<Box<dyn HulyAgent>> {
         match config.provider {
             ProviderKind::OpenAI => {
-                let mut agent_builder = rig::providers::openai::Client::new(
+                let agent_builder = rig::providers::openai::Client::new(
                     &config
                         .provider_api_key
                         .clone()
                         .expect("provider_api_key is required for OpenAI"),
                 )
                 .agent(&config.model);
-                agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, config, memory);
-                agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
-                Ok(Box::new(agent_builder.build()))
+                Ok(Box::new(
+                    Self::configure_agent(agent_builder, config, system_prompt, memory)
+                        .await?
+                        .build(),
+                ))
             }
             ProviderKind::OpenRouter => {
-                let mut agent_builder = crate::providers::openrouter::Client::new(
+                let agent_builder = crate::providers::openrouter::Client::new(
                     &config
                         .provider_api_key
                         .clone()
                         .expect("provider_api_key is required for OpenRouter"),
                 )
                 .agent(&config.model);
-                agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, config, memory);
-                agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
-                Ok(Box::new(agent_builder.build()))
+                Ok(Box::new(
+                    Self::configure_agent(agent_builder, config, system_prompt, memory)
+                        .await?
+                        .build(),
+                ))
             }
             ProviderKind::LMStudio => {
-                let mut agent_builder = rig::providers::openai::Client::from_url(
+                let agent_builder = rig::providers::openai::Client::from_url(
                     "",
                     &config
                         .provider_base_url
@@ -254,10 +271,11 @@ impl Agent {
                         .unwrap_or("http://127.0.0.1:1234/v1".to_string()),
                 )
                 .agent(&config.model);
-                agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-                agent_builder = Self::add_static_tools(agent_builder, config, memory);
-                agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
-                Ok(Box::new(agent_builder.build()))
+                Ok(Box::new(
+                    Self::configure_agent(agent_builder, config, system_prompt, memory)
+                        .await?
+                        .build(),
+                ))
             }
         }
     }
@@ -278,15 +296,15 @@ impl Agent {
     }
 
     async fn process_messages(&mut self) -> Result<(), AgentError> {
-        if !self.processing {
+        if self.state.is_paused() {
             return Ok(());
         }
         let Some(agent) = self.agent.as_mut() else {
-            self.processing = false;
+            self.set_state(AgentState::Paused);
             return Ok(());
         };
 
-        if self.stream.is_none() && !self.messages.is_empty() {
+        if self.stream.is_none() && is_last_user_message(&self.messages) {
             self.stream = Some(
                 agent
                     .send_messages(
@@ -295,58 +313,61 @@ impl Agent {
                     )
                     .await?,
             );
+            tracing::trace!("Sending messages to model: {:?}", self.messages.last());
+            self.set_state(AgentState::WaitingResponse);
         }
 
         let Some(stream) = self.stream.as_mut() else {
-            self.processing = false;
+            self.set_state(AgentState::WaitingUserPrompt);
             return Ok(());
         };
 
         match stream.next().await {
-            Some(result) => match result {
-                Ok(AssistantContent::Text(text)) => {
-                    if self.assistant_content.is_none() {
-                        self.assistant_content = Some(text.text.clone());
-                        self.add_message(Message::assistant(text.text.clone()));
-                    } else {
-                        self.assistant_content
+            Some(result) => {
+                tracing::trace!("Received response from model: {:?}", result);
+
+                match result {
+                    Ok(AssistantContent::Text(text)) => {
+                        if matches!(self.state, AgentState::Thinking) {
+                            self.set_state(AgentState::Thinking);
+                        }
+                        if self.assistant_content.is_none() {
+                            self.assistant_content = Some(text.text.clone());
+                            self.add_message(Message::assistant(text.text.clone()));
+                        } else {
+                            self.assistant_content
+                                .as_mut()
+                                .unwrap()
+                                .push_str(&text.text);
+                            self.update_last_message(Message::assistant(
+                                self.assistant_content.as_ref().unwrap(),
+                            ));
+                        }
+                    }
+                    Ok(AssistantContent::ToolCall(tool_call)) => {
+                        self.set_state(AgentState::ToolCall(
+                            tool_call.function.name.clone(),
+                            tool_call.function.arguments.clone(),
+                        ));
+                        self.assistant_content = None;
+                        self.add_message(Message::Assistant {
+                            content: OneOrMany::one(AssistantContent::ToolCall(tool_call.clone())),
+                        });
+                        let (tool_result, is_error) = match self
+                            .agent
                             .as_mut()
                             .unwrap()
-                            .push_str(&text.text);
-                        self.update_last_message(Message::assistant(
-                            self.assistant_content.as_ref().unwrap(),
-                        ));
-                    }
-                }
-                Ok(AssistantContent::ToolCall(tool_call)) => {
-                    tracing::info!("Tool call: {}", tool_call.function.name);
-                    self.assistant_content = None;
-                    self.add_message(Message::Assistant {
-                        content: OneOrMany::one(AssistantContent::ToolCall(tool_call.clone())),
-                    });
-                    let (tool_result, is_error) = match self
-                        .agent
-                        .as_mut()
-                        .unwrap()
-                        .tools()
-                        .call(
-                            &tool_call.function.name,
-                            tool_call.function.arguments.to_string(),
-                        )
-                        .await
-                    {
-                        Ok(tool_json_result) => {
-                            if tool_json_result.starts_with("\"") {
-                                // TODO: currently all tools return a string, but this should be more flexible
-                                (serde_json::from_str(&tool_json_result).unwrap(), false)
-                            } else {
-                                // raw string response
-                                (tool_json_result, false)
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Error calling tool: {}", e);
-                            match e {
+                            .tools()
+                            .call(
+                                &tool_call.function.name,
+                                tool_call.function.arguments.to_string(),
+                            )
+                            .await
+                        {
+                            Ok(tool_json_result) => (tool_json_result, false),
+                            Err(e) => {
+                                tracing::error!("Error calling tool: {}", e);
+                                match e {
                                 ToolSetError::ToolCallError(tce) => {
                                     match tce {
                                         ToolError::ToolCallError(ce) => {
@@ -357,75 +378,80 @@ impl Agent {
                                 }
                                 _ => (format!("The tool execution failed with the following error: <error>{}</error>", e), true),
                             }
-                        }
-                    };
+                            }
+                        };
 
-                    if tool_call.function.name == ExecuteCommandTool::NAME {
-                        let command = tool_call.function.arguments.as_object().unwrap()["command"]
-                            .as_str()
-                            .unwrap();
-                        self.sender
-                            .send(AgentOutputEvent::ExecuteCommand(AgentCommandStatus {
-                                command: command.to_string(),
-                                output: tool_result.clone(),
-                            }))
-                            .unwrap();
-                    }
-                    tracing::trace!("tool_result: '{}'", tool_result);
-                    if tool_result.is_empty()
-                        && tool_call.function.name != AttemptCompletionTool::NAME
-                    {
-                        tracing::info!(
-                            "Stop processing because empty result from tool: {}",
-                            tool_call.function.name
-                        );
-                        self.pending_tool_id = Some(tool_call.id);
-                        self.processing = false;
-                    } else {
-                        if !is_error {
-                            match tool_call.function.name.as_str() {
-                                ReadFileTool::NAME
-                                | WriteToFileTool::NAME
-                                | ListFilesTool::NAME
-                                | ReplaceInFileTool::NAME => {
-                                    if let Some(path) = tool_call
-                                        .function
-                                        .arguments
-                                        .as_object()
-                                        .unwrap()
-                                        .get("path")
-                                    {
-                                        self.sender
-                                            .send(AgentOutputEvent::HighlightFile(
-                                                path.as_str().unwrap().to_string(),
-                                                tool_call.function.name == WriteToFileTool::NAME,
-                                            ))
-                                            .unwrap();
+                        if tool_call.function.name == ExecuteCommandTool::NAME {
+                            let command = tool_call.function.arguments.as_object().unwrap()
+                                ["command"]
+                                .as_str()
+                                .unwrap();
+                            self.sender
+                                .send(AgentOutputEvent::ExecuteCommand(AgentCommandStatus {
+                                    command: command.to_string(),
+                                    output: tool_result.clone(),
+                                }))
+                                .unwrap();
+                        }
+                        tracing::trace!("tool_result: '{}'", tool_result);
+                        if tool_result.is_empty()
+                            && tool_call.function.name != AttemptCompletionTool::NAME
+                        {
+                            tracing::info!(
+                                "Stop processing because empty result from tool: {}",
+                                tool_call.function.name
+                            );
+                            self.pending_tool_id = Some(tool_call.id);
+                            self.set_state(AgentState::WaitingUserPrompt);
+                        } else {
+                            if !is_error {
+                                match tool_call.function.name.as_str() {
+                                    ReadFileTool::NAME
+                                    | WriteToFileTool::NAME
+                                    | ListFilesTool::NAME
+                                    | ReplaceInFileTool::NAME => {
+                                        if let Some(path) = tool_call
+                                            .function
+                                            .arguments
+                                            .as_object()
+                                            .unwrap()
+                                            .get("path")
+                                        {
+                                            self.sender
+                                                .send(AgentOutputEvent::HighlightFile(
+                                                    path.as_str().unwrap().to_string(),
+                                                    tool_call.function.name
+                                                        == WriteToFileTool::NAME,
+                                                ))
+                                                .unwrap();
+                                        }
                                     }
+                                    _ => {}
                                 }
-                                _ => {}
+                            }
+                            let mut result_message = Message::User {
+                                content: OneOrMany::one(UserContent::tool_result(
+                                    tool_call.id,
+                                    OneOrMany::one(ToolResultContent::text(tool_result)),
+                                )),
+                            };
+                            if tool_call.function.name == AttemptCompletionTool::NAME {
+                                self.set_state(AgentState::Completed(false));
+                                tracing::info!("Stop task with success");
+                                persist_history(&self.messages);
+                            } else {
+                                add_env_message(&mut result_message, None, &self.config.workspace)
+                                    .await;
+                                self.add_message(result_message);
                             }
                         }
-                        let mut result_message = Message::User {
-                            content: OneOrMany::one(UserContent::tool_result(
-                                tool_call.id,
-                                OneOrMany::one(ToolResultContent::text(tool_result)),
-                            )),
-                        };
-                        add_env_message(&mut result_message, None, &self.config.workspace).await;
-                        self.add_message(result_message);
-                        if tool_call.function.name == AttemptCompletionTool::NAME {
-                            self.has_completion = true;
-                            tracing::info!("Stop task with success");
-                        }
+                    }
+                    Err(e) => {
+                        self.stream = None;
+                        return Err(e.into());
                     }
                 }
-                Err(e) => {
-                    self.processing = false;
-                    self.stream = None;
-                    return Err(e.into());
-                }
-            },
+            }
             None => {
                 let response: CompletionResponse<
                     Option<rig::providers::openai::StreamingCompletionResponse>,
@@ -434,15 +460,10 @@ impl Agent {
                 tracing::info!("Usage: {:?}", usage);
                 self.current_tokens = usage.total_tokens as u32;
                 self.assistant_content = None;
-                if self.has_completion {
-                    self.pending_tool_id = None;
-                    self.processing = false;
-                } else if self
-                    .messages
-                    .last()
-                    .is_some_and(|message| !matches!(message, Message::User { .. }))
-                {
-                    self.processing = false;
+                if matches!(self.state, AgentState::Completed(false)) {
+                    self.set_state(AgentState::Completed(true));
+                } else if !is_last_user_message(&self.messages) && !self.state.is_completed() {
+                    self.set_state(AgentState::WaitingUserPrompt);
                 }
                 tracing::debug!("persist_history");
                 persist_history(&self.messages);
@@ -465,6 +486,24 @@ impl Agent {
                 .unwrap(),
         );
         self.init_memory_index().await;
+        // restore state from messages
+        self.set_state(if self.messages.is_empty() {
+            AgentState::WaitingUserPrompt
+        } else {
+            match self.messages.last().unwrap() {
+                Message::User { .. } => AgentState::Paused,
+                Message::Assistant { content } => match content.first() {
+                    AssistantContent::Text(_) => AgentState::WaitingUserPrompt,
+                    AssistantContent::ToolCall(tool_call) => {
+                        if tool_call.function.name == AttemptCompletionTool::NAME {
+                            AgentState::Completed(true)
+                        } else {
+                            AgentState::WaitingUserPrompt
+                        }
+                    }
+                },
+            }
+        });
         while !self.sender.is_closed() {
             if let Ok(event) = self.receiver.try_recv() {
                 match event {
@@ -474,40 +513,26 @@ impl Agent {
                     }
                     AgentControlEvent::CancelTask => {
                         tracing::info!("Cancel current task");
-                        if self.processing {
-                            self.cancel_task();
-                        } else if !self.has_completion && !self.messages.is_empty() {
-                            self.processing = true;
+                        if !self.state.is_paused() {
+                            self.set_state(AgentState::Paused);
+                        } else if !self.state.is_completed() && !self.messages.is_empty() {
+                            self.set_state(AgentState::WaitingResponse);
                         }
                     }
                     AgentControlEvent::NewTask => {
                         tracing::info!("New task");
                         self.messages.clear();
-                        self.processing = false;
-                        self.has_completion = false;
+                        self.set_state(AgentState::WaitingUserPrompt);
                         self.sender.send(AgentOutputEvent::NewTask).ok();
                         persist_history(&self.messages);
                     }
                 }
             }
-            let prev_processing = self.processing;
             if let Err(e) = self.process_messages().await {
                 tracing::debug!("persist_history");
                 persist_history(&self.messages);
-                self.sender
-                    .send(AgentOutputEvent::Error(format!(
-                        "Send message error: {}",
-                        e
-                    )))
-                    .ok();
                 tracing::error!("Error processing messages: {}", e);
-                self.processing = false;
-                self.has_completion = false;
-            }
-            if prev_processing != self.processing {
-                self.sender
-                    .send(AgentOutputEvent::TaskStatus(self.status()))
-                    .ok();
+                self.set_state(AgentState::Error(format!("Error: {}", e)));
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
@@ -532,26 +557,20 @@ impl Agent {
         )
         .await;
         self.add_message(message);
-        self.processing = true;
-        self.has_completion = false;
-        self.sender
-            .send(AgentOutputEvent::TaskStatus(self.status()))
-            .ok();
+        self.set_state(AgentState::WaitingResponse);
     }
 
-    fn status(&self) -> AgentTaskStatus {
-        AgentTaskStatus {
-            current_tokens: self.current_tokens,
-            max_tokens: 1,
-            processing: self.processing,
+    fn set_state(&mut self, state: AgentState) {
+        tracing::info!("Agent state trasition: {}->{}", self.state, state);
+        self.state = state;
+        if !self.sender.is_closed() {
+            self.sender
+                .send(AgentOutputEvent::AgentStatus(AgentStatus {
+                    current_tokens: self.current_tokens,
+                    max_tokens: 1,
+                    state: self.state.clone(),
+                }))
+                .unwrap();
         }
-    }
-
-    fn cancel_task(&mut self) {
-        self.processing = false;
-        self.has_completion = false;
-        self.sender
-            .send(AgentOutputEvent::TaskStatus(self.status()))
-            .ok();
     }
 }

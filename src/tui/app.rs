@@ -2,7 +2,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::agent::event::{AgentCommandStatus, AgentTaskStatus};
+use crate::agent::event::{AgentCommandStatus, AgentState, AgentStatus};
 use crate::config::Config;
 
 use crate::{
@@ -53,7 +53,7 @@ impl From<u8> for FocusedComponent {
 #[derive(Debug, Default)]
 pub struct ModelState {
     pub messages: Vec<Message>,
-    pub task_status: AgentTaskStatus,
+    pub agent_status: AgentStatus,
     pub execute_command: AgentCommandStatus,
     pub last_error: Option<String>,
 }
@@ -203,22 +203,24 @@ impl App<'_> {
                         AgentOutputEvent::ExecuteCommand(status) => {
                             self.model.execute_command = status;
                         }
-                        AgentOutputEvent::TaskStatus(status) => {
-                            tracing::info!("task_status: {:?}", status);
+                        AgentOutputEvent::AgentStatus(status) => {
+                            tracing::info!("agent_status: {:?}", status);
                             // if the task is no longer processing, focus input
-                            if self.model.task_status.processing && !status.processing {
+                            if !self.model.agent_status.state.is_paused()
+                                && status.state.is_paused()
+                            {
                                 self.ui.focus = FocusedComponent::Input;
                             }
-                            self.model.task_status = status;
+                            self.model.agent_status = status;
+                            if let AgentState::Error(msg) = &self.model.agent_status.state {
+                                self.model.last_error = Some(msg.clone());
+                            }
                         }
                         AgentOutputEvent::HighlightFile(path, is_new) => {
                             if is_new {
                                 self.ui.tree_state.update_items();
                             }
                             self.ui.tree_state.highlight_file(path);
-                        }
-                        AgentOutputEvent::Error(error) => {
-                            self.model.last_error = Some(error);
                         }
                     },
                 },
@@ -317,12 +319,12 @@ impl App<'_> {
             {
                 self.events.send(AppEvent::Quit)
             }
-            KeyCode::Char('z') | KeyCode::Char('Z')
+            KeyCode::Char('n') | KeyCode::Char('N')
                 if key_event.modifiers == KeyModifiers::CONTROL =>
             {
                 self.agent_sender.send(AgentControlEvent::NewTask).unwrap()
             }
-            KeyCode::Char('x') if key_event.modifiers == KeyModifiers::CONTROL => self
+            KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => self
                 .agent_sender
                 .send(AgentControlEvent::CancelTask)
                 .unwrap(),

@@ -3,6 +3,7 @@ mod app;
 mod event;
 mod ratskin;
 mod theme;
+mod tool_info;
 mod widgets;
 
 pub use app::App;

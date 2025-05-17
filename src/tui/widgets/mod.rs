@@ -1,11 +1,11 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 pub mod filetree;
 mod message;
+mod task_status;
 
 use crate::tui::App;
 use ratatui::layout::{Margin, Offset};
 use ratatui::prelude::StatefulWidget;
-use ratatui::style::Modifier;
 use ratatui::widgets::{ScrollbarState, Widget};
 use ratatui::{
     buffer::Buffer,
@@ -18,6 +18,7 @@ use tui_widget_list::{ListBuilder, ListView, ScrollAxis};
 
 use self::filetree::FileTreeWidget;
 use self::message::MessageWidget;
+use self::task_status::TaskStatusWidget;
 
 use super::app::FocusedComponent;
 
@@ -89,6 +90,7 @@ impl Widget for &mut App<'_> {
                     Constraint::Length(4), // Task panel
                     Constraint::Fill(3),   // Chat history
                     Constraint::Max(u16::min(10, (error_message.lines().count() + 2) as u16)), // Error message
+                    Constraint::Length(1), // Task progress status
                     Constraint::Length(3), // Input field
                 ])
                 .split(content_layout[0])
@@ -98,6 +100,7 @@ impl Widget for &mut App<'_> {
                 .constraints([
                     Constraint::Length(4), // Task panel
                     Constraint::Min(3),    // Chat history
+                    Constraint::Length(1), // Task progress status
                     Constraint::Length(3), // Input field
                 ])
                 .split(content_layout[0])
@@ -159,6 +162,7 @@ impl Widget for &mut App<'_> {
         // Chat history
         let chat_block = Block::bordered()
             .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+            .padding(Padding::bottom(1))
             .title(" History ")
             .title_alignment(Alignment::Right)
             .title_style(theme.primary_style())
@@ -174,7 +178,7 @@ impl Widget for &mut App<'_> {
                 context.is_selected,
                 self.ui.history_opened_state.contains(&context.index),
                 left_panel[1].width,
-                context.index == chat_len - 1 && self.model.task_status.processing,
+                context.index == chat_len - 1 && !self.model.agent_status.state.is_paused(),
                 self.ui.throbber_state.clone(),
             );
             let main_axis_size = item.main_axis_size();
@@ -204,29 +208,26 @@ impl Widget for &mut App<'_> {
                 .style(theme.error_style())
                 .render(left_panel[2], buf);
         }
+        // Task progress status
+        TaskStatusWidget.render(
+            left_panel[if self.model.last_error.is_some() {
+                3
+            } else {
+                2
+            }],
+            buf,
+            &self.model.agent_status.state,
+            &theme,
+            &self.ui.throbber_state,
+        );
+
         // Input field
-        let input_block =
-            Block::bordered()
-                .borders(Borders::TOP | Borders::LEFT)
-                .title(format!(
-                    " {} ",
-                    if self.model.task_status.processing {
-                        "Input"
-                    } else {
-                        "Waiting User Prompt"
-                    }
-                ))
-                .padding(Padding::horizontal(1))
-                .title_alignment(Alignment::Right)
-                .title_style(theme.primary_style().add_modifier(
-                    if self.model.task_status.processing {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::RAPID_BLINK
-                    },
-                ))
-                .border_type(BorderType::Rounded)
-                .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::Input)));
+        let input_block = Block::bordered()
+            .borders(Borders::TOP | Borders::LEFT)
+            .padding(Padding::horizontal(1))
+            .title_alignment(Alignment::Right)
+            .border_type(BorderType::Rounded)
+            .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::Input)));
 
         // Create a TextArea with the App's input text
         self.ui.textarea.set_block(input_block);
@@ -241,9 +242,9 @@ impl Widget for &mut App<'_> {
         // Render the textarea
         self.ui.textarea.render(
             left_panel[if self.model.last_error.is_some() {
-                3
+                4
             } else {
-                2
+                3
             }],
             buf,
         );
@@ -304,9 +305,9 @@ impl Widget for &mut App<'_> {
             .style(Style::default().bg(theme.background));
 
         let shortcuts_text = Text::from(vec![Line::from(vec![
-            Span::styled("^z", theme.highlight_style()),
+            Span::styled("^n", theme.highlight_style()),
             Span::styled(": New Task | ", theme.inactive_style()),
-            Span::styled("^x", theme.highlight_style()),
+            Span::styled("^p", theme.highlight_style()),
             Span::styled(": Pause/Resume Task | ", theme.inactive_style()),
             Span::styled("⇥", theme.highlight_style()),
             Span::styled(": Change Focus | ", theme.inactive_style()),
@@ -315,7 +316,7 @@ impl Widget for &mut App<'_> {
             Span::styled("Enter", theme.highlight_style()),
             Span::styled(": Select | ", theme.inactive_style()),
             Span::styled("^q", theme.highlight_style()),
-            Span::styled(": Quit", theme.inactive_style()),
+            Span::styled(": Quit ", theme.inactive_style()),
         ])]);
 
         Paragraph::new(shortcuts_text)
