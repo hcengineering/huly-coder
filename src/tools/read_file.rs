@@ -59,7 +59,6 @@ impl Tool for ReadFileTool {
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         let path = normalize_path(&self.workspace, &args.path);
         tracing::info!("Reading file {}", path);
-        let content = fs::read_to_string(path)?;
-        Ok(serde_json::to_string(&content)?)
+        Ok(fs::read_to_string(path)?)
     }
 }

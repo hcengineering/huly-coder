@@ -2,6 +2,11 @@
 # You can override config in ~\huly-coder.yaml file
 #
 
+### Example Anthropic config
+# provider: Anthropic
+# model: claude-3-5-sonnet-latest
+# provider_api_key: sk-xxxxxxxxxxxxxxxxxxxxx
+
 #provider: LMStudio
 provider: OpenRouter
 #model: qwen3-8b

@@ -13,6 +13,7 @@ pub enum ProviderKind {
     OpenAI,
     OpenRouter,
     LMStudio,
+    Anthropic,
 }
 
 #[derive(Debug, Deserialize, Clone)]

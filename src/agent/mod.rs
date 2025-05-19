@@ -248,6 +248,21 @@ impl Agent {
                         .build(),
                 ))
             }
+            ProviderKind::Anthropic => {
+                let agent_builder = rig::providers::anthropic::ClientBuilder::new(
+                    &config
+                        .provider_api_key
+                        .clone()
+                        .expect("provider_api_key is required for Anthropic"),
+                )
+                .build()
+                .agent(&config.model);
+                Ok(Box::new(
+                    Self::configure_agent(agent_builder, config, system_prompt, memory)
+                        .await?
+                        .build(),
+                ))
+            }
             ProviderKind::OpenRouter => {
                 let agent_builder = crate::providers::openrouter::Client::new(
                     &config
@@ -431,11 +446,12 @@ impl Agent {
                             }
                             let mut result_message = Message::User {
                                 content: OneOrMany::one(UserContent::tool_result(
-                                    tool_call.id,
+                                    tool_call.id.clone(),
                                     OneOrMany::one(ToolResultContent::text(tool_result)),
                                 )),
                             };
                             if tool_call.function.name == AttemptCompletionTool::NAME {
+                                self.pending_tool_id = Some(tool_call.id.clone());
                                 self.set_state(AgentState::Completed(false));
                                 tracing::info!("Stop task with success");
                                 persist_history(&self.messages);

@@ -85,12 +85,11 @@ impl Tool for ExecuteCommandTool {
             .arg(args.command)
             .output()
             .map(|output| {
-                serde_json::to_string(&format!(
+                format!(
                     "{}\n{}",
                     String::from_utf8(output.stderr).unwrap_or_else(|_| "".to_string()),
                     String::from_utf8(output.stdout).unwrap_or_else(|_| "".to_string())
-                ))
-                .unwrap()
+                )
             })?)
     }
 }
