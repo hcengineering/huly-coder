@@ -62,7 +62,6 @@ pub struct Agent {
     assistant_content: Option<String>,
     memory: Arc<RwLock<MemoryManager>>,
     memory_index: Option<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>,
-    pending_tool_id: Option<String>,
     current_tokens: u32,
     state: AgentState,
 }
@@ -90,7 +89,6 @@ impl Agent {
             messages,
             stream: None,
             assistant_content: None,
-            pending_tool_id: None,
             current_tokens: 0,
             memory: Arc::new(RwLock::new(MemoryManager::new(false))),
             memory_index: None,
@@ -295,6 +293,15 @@ impl Agent {
         }
     }
 
+    fn pending_tool_id(&self) -> Option<String> {
+        self.messages.last().and_then(|message| match message {
+            Message::User { .. } => None,
+            Message::Assistant { content } => match content.first() {
+                AssistantContent::Text(_) => None,
+                AssistantContent::ToolCall(tool_call) => Some(tool_call.id.clone()),
+            },
+        })
+    }
     fn add_message(&mut self, message: Message) {
         self.sender
             .send(AgentOutputEvent::AddMessage(message.clone()))
@@ -416,7 +423,6 @@ impl Agent {
                                 "Stop processing because empty result from tool: {}",
                                 tool_call.function.name
                             );
-                            self.pending_tool_id = Some(tool_call.id);
                             self.set_state(AgentState::WaitingUserPrompt);
                         } else {
                             if !is_error {
@@ -451,7 +457,6 @@ impl Agent {
                                 )),
                             };
                             if tool_call.function.name == AttemptCompletionTool::NAME {
-                                self.pending_tool_id = Some(tool_call.id.clone());
                                 self.set_state(AgentState::Completed(false));
                                 tracing::info!("Stop task with success");
                                 persist_history(&self.messages);
@@ -556,7 +561,7 @@ impl Agent {
     }
 
     async fn send_message(&mut self, message: String) {
-        let mut message = if let Some(tool_id) = self.pending_tool_id.take() {
+        let mut message = if let Some(tool_id) = self.pending_tool_id() {
             Message::User {
                 content: OneOrMany::one(UserContent::tool_result(
                     tool_id,
