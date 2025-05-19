@@ -76,6 +76,7 @@ fn init_panic_hook() {
 fn init_tui() -> io::Result<DefaultTerminal> {
     enable_raw_mode()?;
     execute!(stdout(), EnterAlternateScreen)?;
+    execute!(stdout(), crossterm::event::EnableMouseCapture)?;
     Terminal::new(CrosstermBackend::new(stdout()))
 }
 

@@ -1,5 +1,5 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::agent::event::{AgentCommandStatus, AgentState, AgentStatus};
@@ -13,6 +13,8 @@ use crate::{
     },
 };
 use crossterm::event::KeyEventKind;
+use ratatui::layout::Position;
+use ratatui::prelude::Rect;
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
     widgets::ScrollbarState,
@@ -25,7 +27,7 @@ use tui_widget_list::ListState;
 
 use super::filetree::FileTreeState;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum FocusedComponent {
     /// Input text area field
@@ -69,6 +71,7 @@ pub struct UiState<'a> {
     pub history_state: ListState,
     pub history_opened_state: HashSet<usize>,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
+    pub widget_areas: HashMap<FocusedComponent, Rect>,
 }
 
 #[derive(Debug)]
@@ -92,8 +95,9 @@ impl UiState<'_> {
             terminal_scroll_position: 0,
             tree_state: FileTreeState::new(workspace),
             history_state: ListState::default(),
-            history_opened_state: HashSet::new(),
+            history_opened_state: HashSet::default(),
             throbber_state: throbber_widgets_tui::ThrobberState::default(),
+            widget_areas: HashMap::default(),
         }
     }
 }
@@ -130,54 +134,85 @@ impl App<'_> {
 
             match self.events.next().await? {
                 UiEvent::Tick => self.tick(),
-                UiEvent::Crossterm(event) => {
-                    if let crossterm::event::Event::Key(KeyEvent {
-                        code: KeyCode::Tab,
-                        kind: KeyEventKind::Press,
-                        ..
-                    }) = event
-                    {
-                        self.ui.focus = (self.ui.focus as u8 + 1u8).into();
-                        self.ui.tree_state.focused =
-                            matches!(self.ui.focus, FocusedComponent::Tree);
-                    } else {
-                        if let crossterm::event::Event::Key(key_event) = event {
-                            self.handle_global_key_events(key_event)?
-                        }
-                        match self.ui.focus {
-                            FocusedComponent::Input => {
-                                if Self::handle_text_input(&mut self.ui.textarea, &event)
-                                    && !self.ui.textarea.is_empty()
-                                {
-                                    self.ui.textarea.select_all();
-                                    self.ui.textarea.cut();
-                                    self.model.last_error = None;
-                                    self.agent_sender
-                                        .send(agent::AgentControlEvent::SendMessage(
-                                            self.ui.textarea.yank_text(),
-                                        ))
-                                        .unwrap();
+                UiEvent::Crossterm(event) => match event {
+                    crossterm::event::Event::Key(key_event) => {
+                        if !self.handle_global_key_events(key_event)? {
+                            match self.ui.focus {
+                                FocusedComponent::Input => {
+                                    if Self::handle_text_input(&mut self.ui.textarea, &event)
+                                        && !self.ui.textarea.is_empty()
+                                    {
+                                        self.ui.textarea.select_all();
+                                        self.ui.textarea.cut();
+                                        self.model.last_error = None;
+                                        self.agent_sender
+                                            .send(agent::AgentControlEvent::SendMessage(
+                                                self.ui.textarea.yank_text(),
+                                            ))
+                                            .unwrap();
+                                    }
                                 }
-                            }
-                            FocusedComponent::Tree => {
-                                Self::handle_tree_input(&mut self.ui.tree_state, &event);
-                            }
-                            FocusedComponent::History => {
-                                Self::handle_list_input(
-                                    &mut self.ui.history_state,
-                                    &mut self.ui.history_opened_state,
-                                    &event,
-                                );
-                            }
-                            FocusedComponent::Terminal => {
-                                Self::handle_scroll_input(
-                                    &mut self.ui.terminal_scroll_position,
-                                    &event,
-                                );
+                                FocusedComponent::Tree => {
+                                    Self::handle_tree_input(&mut self.ui.tree_state, &event);
+                                }
+                                FocusedComponent::History => {
+                                    Self::handle_list_input(
+                                        &mut self.ui.history_state,
+                                        &mut self.ui.history_opened_state,
+                                        &event,
+                                    );
+                                }
+                                FocusedComponent::Terminal => {
+                                    Self::handle_scroll_input(
+                                        &mut self.ui.terminal_scroll_position,
+                                        &event,
+                                    );
+                                }
                             }
                         }
                     }
-                }
+                    crossterm::event::Event::Mouse(mouse_event) => {
+                        if matches!(mouse_event.kind, crossterm::event::MouseEventKind::Down(_)) {
+                            let focus = self.ui.widget_areas.iter().find_map(|(k, v)| {
+                                if v.contains(Position {
+                                    x: mouse_event.column,
+                                    y: mouse_event.row,
+                                }) {
+                                    Some(k)
+                                } else {
+                                    None
+                                }
+                            });
+                            if let Some(focus) = focus {
+                                self.ui.focus = focus.clone();
+                                self.ui.tree_state.focused =
+                                    matches!(self.ui.focus, FocusedComponent::Tree);
+                            }
+                            match self.ui.focus {
+                                FocusedComponent::Input => {
+                                    Self::handle_text_input(&mut self.ui.textarea, &event);
+                                }
+                                FocusedComponent::Tree => {
+                                    Self::handle_tree_input(&mut self.ui.tree_state, &event);
+                                }
+                                FocusedComponent::History => {
+                                    Self::handle_list_input(
+                                        &mut self.ui.history_state,
+                                        &mut self.ui.history_opened_state,
+                                        &event,
+                                    );
+                                }
+                                FocusedComponent::Terminal => {
+                                    Self::handle_scroll_input(
+                                        &mut self.ui.terminal_scroll_position,
+                                        &event,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                },
                 UiEvent::App(app_event) => match app_event {
                     AppEvent::Quit => self.quit(),
                     AppEvent::Agent(evt) => match evt {
@@ -308,9 +343,9 @@ impl App<'_> {
         }
     }
 
-    pub fn handle_global_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
+    pub fn handle_global_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<bool> {
         if key_event.kind != KeyEventKind::Press {
-            return Ok(());
+            return Ok(false);
         }
 
         match key_event.code {
@@ -328,9 +363,35 @@ impl App<'_> {
                 .agent_sender
                 .send(AgentControlEvent::CancelTask)
                 .unwrap(),
-            _ => {}
+            KeyCode::BackTab => {
+                let mut focus = self.ui.focus.clone() as u8;
+                if focus == 0 {
+                    focus = FocusedComponent::Terminal as u8;
+                } else {
+                    focus = focus - 1;
+                }
+                self.ui.focus = focus.into();
+            }
+            KeyCode::Tab => {
+                self.ui.focus = (self.ui.focus.clone() as u8 + 1u8).into();
+            }
+            KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Char('3') | KeyCode::Char('4')
+                if key_event.modifiers == KeyModifiers::ALT =>
+            {
+                match key_event.code {
+                    KeyCode::Char('1') => self.ui.focus = FocusedComponent::Input.into(),
+                    KeyCode::Char('2') => self.ui.focus = FocusedComponent::History.into(),
+                    KeyCode::Char('3') => self.ui.focus = FocusedComponent::Tree.into(),
+                    KeyCode::Char('4') => self.ui.focus = FocusedComponent::Terminal.into(),
+                    _ => {}
+                };
+            }
+            _ => {
+                return Ok(false);
+            }
         }
-        Ok(())
+        self.ui.tree_state.focused = matches!(self.ui.focus, FocusedComponent::Tree);
+        Ok(true)
     }
 
     pub fn current_task_text(&self) -> String {

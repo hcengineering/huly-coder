@@ -192,6 +192,9 @@ impl Widget for &mut App<'_> {
 
         list.render(left_panel[1], buf, &mut self.ui.history_state);
         render_scrollbar(left_panel[1], buf, &mut self.ui.history_scroll_state);
+        self.ui
+            .widget_areas
+            .insert(FocusedComponent::History, left_panel[1]);
 
         // Error message
         if let Some(error) = self.model.last_error.as_ref() {
@@ -240,14 +243,15 @@ impl Widget for &mut App<'_> {
             .set_placeholder_text("Type your message here...");
 
         // Render the textarea
-        self.ui.textarea.render(
-            left_panel[if self.model.last_error.is_some() {
-                4
-            } else {
-                3
-            }],
-            buf,
-        );
+        let input_layout_idx = if self.model.last_error.is_some() {
+            4
+        } else {
+            3
+        };
+        self.ui.textarea.render(left_panel[input_layout_idx], buf);
+        self.ui
+            .widget_areas
+            .insert(FocusedComponent::Input, left_panel[input_layout_idx]);
 
         // Right panel (file tree + terminal)
         let right_panel = Layout::default()
@@ -260,6 +264,9 @@ impl Widget for &mut App<'_> {
 
         // File tree
         FileTreeWidget.render(right_panel[0], buf, &mut self.ui.tree_state);
+        self.ui
+            .widget_areas
+            .insert(FocusedComponent::Tree, right_panel[0]);
 
         // Terminal output
         let terminal_block = Block::bordered()
@@ -296,6 +303,9 @@ impl Widget for &mut App<'_> {
             .style(theme.text_style())
             .scroll((self.ui.terminal_scroll_position, 0))
             .render(right_panel[1], buf);
+        self.ui
+            .widget_areas
+            .insert(FocusedComponent::Terminal, right_panel[1]);
 
         // Status bar with shortcuts
         let status_block = Block::bordered()
@@ -311,6 +321,11 @@ impl Widget for &mut App<'_> {
             Span::styled(": Pause/Resume Task | ", theme.inactive_style()),
             Span::styled("⇥", theme.highlight_style()),
             Span::styled(": Change Focus | ", theme.inactive_style()),
+            #[cfg(target_os = "macos")]
+            Span::styled("⌥[1-4]", theme.highlight_style()),
+            #[cfg(not(target_os = "macos"))]
+            Span::styled("Alt+[1-4]", theme.highlight_style()),
+            Span::styled(": Focus Panel | ", theme.inactive_style()),
             Span::styled("↑↓", theme.highlight_style()),
             Span::styled(": Navigate | ", theme.inactive_style()),
             Span::styled("Enter", theme.highlight_style()),

@@ -19,18 +19,25 @@ use crate::tools::web_fetch::WebFetchTool;
 use crate::tools::web_search::WebSearchTool;
 use crate::tools::write_to_file::WriteToFileTool;
 
-fn array_info<'a>(name: &'a str, child_name: &'a str, args: &'a serde_json::Value) -> &'a str {
+fn array_info<'a>(name: &'a str, child_name: &'a str, args: &'a serde_json::Value) -> String {
     args.get(name)
         .and_then(|v| {
             v.as_array().and_then(|a| {
                 if a.is_empty() {
-                    Some("")
+                    Some("".to_string())
                 } else {
                     a.first().and_then(|f| {
-                        if child_name.is_empty() {
-                            f.as_str()
+                        let name = if child_name.is_empty() {
+                            f.as_str().map(|s| s.to_string())
                         } else {
-                            Some(array_info(child_name, "", f))
+                            f.get(child_name)
+                                .and_then(|child| child.as_str())
+                                .map(|s| s.to_string())
+                        };
+                        if a.len() > 1 {
+                            name.map(|name| format!("{name}...({})", a.len() - 1))
+                        } else {
+                            name
                         }
                     })
                 }
@@ -142,4 +149,40 @@ pub fn get_tool_call_info(name: &str, args: &serde_json::Value) -> (String, Stri
         _ => ("🛠️", format!("MCP Tool: {}", title)),
     };
     (icon.to_string(), info)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn test_array_info_object() {
+        let args = json!({
+          "entities": [
+            {
+              "entityType": "person",
+              "name": "default_user",
+              "observations": [
+                "Name is Test"
+              ]
+            }
+          ]
+        });
+        let res = array_info("entities", "name", &args);
+        assert_eq!(res, "default_user");
+    }
+
+    #[test]
+    fn test_array_info_simple() {
+        let args = json!({
+          "entities": [
+              "default_user",
+              "default_user1",
+          ]
+        });
+        let res = array_info("entities", "", &args);
+        assert_eq!(res, "default_user...(1)");
+    }
 }
