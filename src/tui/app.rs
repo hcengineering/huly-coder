@@ -349,9 +349,7 @@ impl App<'_> {
         }
 
         match key_event.code {
-            KeyCode::Char('q') | KeyCode::Char('c')
-                if key_event.modifiers == KeyModifiers::CONTROL =>
-            {
+            KeyCode::Char('q') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
             KeyCode::Char('n') | KeyCode::Char('N')

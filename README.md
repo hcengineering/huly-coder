@@ -1,6 +1,21 @@
 # Huly Coder
 
-Huly Coder is an AI coding agent that helps you develop software through natural language interaction.
+Huly Coder is an AI coding agent that helps you develop software through natural language interaction. It provides a powerful terminal-based interface with a suite of tools for file manipulation, code generation, and project management.
+
+## Features
+
+- **Terminal User Interface (TUI)**: Clean and intuitive terminal interface with file tree, message history, and task status display
+- **Smart File Operations**: Tools for reading, writing, searching, and modifying files with precision
+- **Web Integration**: Built-in web search and URL fetching capabilities
+- **Memory System**: Persistent knowledge graph for maintaining context across sessions
+- **Multiple LLM Providers**: Support for OpenRouter, LMStudio, and OpenAI
+- **Docker Support**: Easy containerization for portable development environments
+
+## Requirements
+
+- Rust 1.75 or higher
+- OpenRouter API key (or alternative LLM provider credentials)
+- Terminal with Unicode support
 
 ## Configuration
 
@@ -45,3 +60,37 @@ docker run -it --rm -v "$(pwd)/target/workspace:/target/workspace" -e OPENROUTER
 Replace `<your-api-key>` with your OpenRouter API key.
 
 The agent uses `target/workspace` as its working directory.
+
+## Available Tools
+
+Huly Coder comes with a comprehensive set of tools:
+
+- **File Operations**
+  - Read and write files with automatic directory creation
+  - Smart file content replacement with context awareness
+  - Recursive file listing and searching with regex support
+  - File content search with contextual results
+
+- **System Tools**
+  - Execute system commands with safety checks
+  - Interactive command execution support
+  - Background process management
+
+- **Web Tools**
+  - Web search capabilities
+  - URL content fetching with markdown conversion
+  - API integration support
+
+- **Memory System**
+  - Knowledge graph for persistent memory
+  - Entity and relationship management
+  - Context-aware observation storage
+  - Search and retrieval capabilities
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

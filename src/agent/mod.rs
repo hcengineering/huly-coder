@@ -417,7 +417,7 @@ impl Agent {
                                 .unwrap();
                         }
                         tracing::trace!("tool_result: '{}'", tool_result);
-                        if tool_result.is_empty()
+                        if (tool_result.is_empty() || tool_result == "\"\"")
                             && tool_call.function.name != AttemptCompletionTool::NAME
                         {
                             tracing::info!(
