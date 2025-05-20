@@ -176,10 +176,9 @@ impl Widget for &mut App<'_> {
                 &self.model.messages[context.index],
                 &theme,
                 context.is_selected,
-                self.ui.history_opened_state.contains(&context.index),
+                self.ui.history_opened_state.contains(&context.index)
+                    || context.index == self.model.messages.len() - 1,
                 left_panel[1].width,
-                context.index == chat_len - 1 && !self.model.agent_status.state.is_paused(),
-                self.ui.throbber_state.clone(),
             );
             let main_axis_size = item.main_axis_size();
             (item, main_axis_size)
@@ -187,11 +186,18 @@ impl Widget for &mut App<'_> {
         let list = ListView::new(builder, chat_len)
             .block(chat_block)
             .scroll_axis(ScrollAxis::Vertical)
+            .scrollbar(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(None)
+                    .thumb_symbol("▐"),
+            )
             .infinite_scrolling(false)
             .scroll_padding(2);
 
         list.render(left_panel[1], buf, &mut self.ui.history_state);
-        render_scrollbar(left_panel[1], buf, &mut self.ui.history_scroll_state);
+        //render_scrollbar(left_panel[1], buf, &mut self.ui.history_scroll_state);
         self.ui
             .widget_areas
             .insert(FocusedComponent::History, left_panel[1]);

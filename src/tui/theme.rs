@@ -106,8 +106,8 @@ impl Theme {
             inactive: Color::DarkGray,
             status: Color::DarkGray,
             border: Color::Indexed(236),
-            assistant: Color::from_u32(0x2196F3),
-            user: Color::from_u32(0x4CAF50),
+            assistant: Color::Indexed(75),
+            user: Color::Indexed(113),
         }
     }
 

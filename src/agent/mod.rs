@@ -346,7 +346,7 @@ impl Agent {
 
         match stream.next().await {
             Some(result) => {
-                tracing::trace!("Received response from model: {:?}", result);
+                //tracing::trace!("Received response from model: {:?}", result);
 
                 match result {
                     Ok(AssistantContent::Text(text)) => {

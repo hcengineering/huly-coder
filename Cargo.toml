@@ -52,7 +52,7 @@ ratatui = "0.29.0"
 color-eyre = "0.6.3"
 tui-textarea = "0.7.0"
 tui-tree-widget = "0.23.0"
-tui-widget-list = "0.13.2"
+tui-widget-list = { git = "https://github.com/preiter93/tui-widget-list.git", branch = "main" }
 textwrap = "0.16.0"
 throbber-widgets-tui = "0.8.0"
 tui-popup = "0.6.0"

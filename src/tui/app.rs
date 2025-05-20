@@ -368,7 +368,7 @@ impl App<'_> {
                 if focus == 0 {
                     focus = FocusedComponent::Terminal as u8;
                 } else {
-                    focus = focus - 1;
+                    focus -= 1;
                 }
                 self.ui.focus = focus.into();
             }
@@ -379,10 +379,10 @@ impl App<'_> {
                 if key_event.modifiers == KeyModifiers::ALT =>
             {
                 match key_event.code {
-                    KeyCode::Char('1') => self.ui.focus = FocusedComponent::Input.into(),
-                    KeyCode::Char('2') => self.ui.focus = FocusedComponent::History.into(),
-                    KeyCode::Char('3') => self.ui.focus = FocusedComponent::Tree.into(),
-                    KeyCode::Char('4') => self.ui.focus = FocusedComponent::Terminal.into(),
+                    KeyCode::Char('1') => self.ui.focus = FocusedComponent::Input,
+                    KeyCode::Char('2') => self.ui.focus = FocusedComponent::History,
+                    KeyCode::Char('3') => self.ui.focus = FocusedComponent::Tree,
+                    KeyCode::Char('4') => self.ui.focus = FocusedComponent::Terminal,
                     _ => {}
                 };
             }
