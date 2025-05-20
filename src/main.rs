@@ -112,6 +112,8 @@ async fn main() -> color_eyre::Result<()> {
         output_sender,
         history.clone(),
     );
+    agent.init_memory_index().await;
+
     tokio::spawn(async move {
         agent.run().await;
     });

@@ -1,6 +1,5 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use crate::config::McpClientTransport;
 use crate::config::McpConfig;
@@ -45,6 +44,7 @@ pub mod event;
 pub mod utils;
 pub use event::AgentControlEvent;
 pub use event::AgentOutputEvent;
+use tokio::sync::RwLock;
 
 use self::event::AgentCommandStatus;
 use self::event::AgentState;
@@ -95,8 +95,9 @@ impl Agent {
             state: AgentState::Paused,
         }
     }
-    async fn init_memory_index(&mut self) {
-        let documents = self.memory.read().unwrap().entities().clone();
+
+    pub async fn init_memory_index(&mut self) {
+        let documents = self.memory.read().await.entities().clone();
         let client = rig_fastembed::Client::new();
         let model = client.embedding_model(&rig_fastembed::FastembedModel::AllMiniLML6V2);
         let embeddings = EmbeddingsBuilder::new(model.clone())
@@ -506,7 +507,6 @@ impl Agent {
                 .await
                 .unwrap(),
         );
-        self.init_memory_index().await;
         // restore state from messages
         self.set_state(if self.messages.is_empty() {
             AgentState::WaitingUserPrompt

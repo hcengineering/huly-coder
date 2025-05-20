@@ -4,7 +4,7 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::collections::HashSet;
 use std::fs;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use indicium::simple::{Indexable, SearchIndex};
 use rig::agent::AgentBuilder;
@@ -33,11 +33,11 @@ macro_rules! create_tool {
     ($func_name:ident, $tool_name:ident) => {
         paste::paste! {
             pub struct [<$func_name Tool>] {
-                manager: Arc<RwLock<MemoryManager>>,
+                manager: Arc<tokio::sync::RwLock<MemoryManager>>,
             }
 
             impl [<$func_name Tool>] {
-                pub(self) fn new(manager: Arc<RwLock<MemoryManager>>) -> Self {
+                pub(self) fn new(manager: Arc<tokio::sync::RwLock<MemoryManager>>) -> Self {
                     Self { manager }
                 }
             }
@@ -63,7 +63,7 @@ macro_rules! create_tool {
                 }
 
                 async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-                    self.manager.write().unwrap().call_tool(&self.name(), args)
+                    self.manager.write().await.call_tool(&self.name(), args)
                 }
 
                 fn name(&self) -> String {
@@ -374,7 +374,7 @@ create_tool!(MemoryOpenNodes, open_nodes);
 
 pub(crate) fn add_memory_tools<M>(
     agent_builder: AgentBuilder<M>,
-    memory: Arc<RwLock<MemoryManager>>,
+    memory: Arc<tokio::sync::RwLock<MemoryManager>>,
 ) -> AgentBuilder<M>
 where
     M: CompletionModel,

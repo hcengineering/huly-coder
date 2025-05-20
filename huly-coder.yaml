@@ -1,5 +1,6 @@
 #
-# You can override config in ~\huly-coder.yaml file
+# You can override config in ~\huly-coder.yaml file 
+# or huly-coder-local.yaml file
 #
 
 ### Example Anthropic config
