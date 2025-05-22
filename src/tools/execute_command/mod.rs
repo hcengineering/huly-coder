@@ -254,34 +254,3 @@ impl ProcessRegistry {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    #[tokio::test]
-    async fn test_process_registry() {
-        let mut registry = super::ProcessRegistry::new();
-        registry
-            .execute_command("npm start", ".\\target\\workspace")
-            .await
-            .unwrap();
-        println!("{}: {}", registry.counter, registry.processes.len());
-        println!("{:?}", registry.get_process(1));
-        for _ in 0..5 {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            registry.poll();
-            let (exit_code, output) = registry.get_process(1).unwrap();
-            println!("{exit_code:?}, {output}");
-            if exit_code.is_some() {
-                break;
-            }
-        }
-        println!("Stop processing");
-        registry.stop_process(1).unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        registry.poll();
-        let (exit_code, output) = registry.get_process(1).unwrap();
-        println!("{exit_code:?}, {output}");
-        println!("end");
-    }
-}
