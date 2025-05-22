@@ -2,11 +2,14 @@
 pub mod filetree;
 mod message;
 mod task_status;
+mod terminal;
+
+use std::vec;
 
 use crate::tui::App;
 use ratatui::layout::{Margin, Offset};
 use ratatui::prelude::StatefulWidget;
-use ratatui::widgets::{ScrollbarState, Widget};
+use ratatui::widgets::Widget;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -19,6 +22,7 @@ use tui_widget_list::{ListBuilder, ListView, ScrollAxis};
 use self::filetree::FileTreeWidget;
 use self::message::MessageWidget;
 use self::task_status::TaskStatusWidget;
+use self::terminal::TerminalWidget;
 
 use super::app::FocusedComponent;
 
@@ -275,40 +279,29 @@ impl Widget for &mut App<'_> {
             .insert(FocusedComponent::Tree, right_panel[0]);
 
         // Terminal output
-        let terminal_block = Block::bordered()
-            .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT)
-            .padding(Padding::horizontal(1))
-            .title(" Terminal ")
-            .title_alignment(Alignment::Right)
-            .title_style(theme.primary_style())
-            .border_type(BorderType::Rounded)
-            .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::Terminal)));
-
-        let mut terminal_lines = vec![];
-        if !self.model.execute_command.command.is_empty() {
-            terminal_lines.push(Line::styled(
-                format!("> {}", self.model.execute_command.command),
-                theme.primary_style(),
-            ));
-        }
-        if !self.model.execute_command.output.is_empty() {
-            let output = self.model.execute_command.output.replace("\\n", "\n");
-            output.lines().for_each(|line| {
-                terminal_lines.push(Line::styled(line.to_string(), theme.inactive_text_style()))
-            });
-        }
-
-        self.ui.terminal_scroll_state = self
-            .ui
-            .terminal_scroll_state
-            .content_length(terminal_lines.len())
-            .position(self.ui.terminal_scroll_position.into());
-        render_scrollbar(right_panel[1], buf, &mut self.ui.terminal_scroll_state);
-        Paragraph::new(terminal_lines)
-            .block(terminal_block)
-            .style(theme.text_style())
-            .scroll((self.ui.terminal_scroll_position, 0))
-            .render(right_panel[1], buf);
+        // self.model.terminal_statuses = vec![
+        //     AgentCommandStatus {
+        //         command_id: 1,
+        //         command: Some("npm start".to_string()),
+        //         output: "\n> workspace@1.0.0 start\n> node index.js\n\nServer running at http://localhost:3000\n".to_string(),
+        //         is_active: true,
+        //     },
+        //     AgentCommandStatus {
+        //         command_id: 2,
+        //         command: Some("cargo build".to_string()),
+        //         output: "\n\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\nasdasd\n".to_string(),
+        //         is_active: false,
+        //     },
+        // ];
+        TerminalWidget.render(
+            right_panel[1],
+            buf,
+            matches!(self.ui.focus, FocusedComponent::Terminal),
+            &mut self.ui.terminal_state,
+            &self.model.terminal_statuses,
+            &theme,
+            &self.ui.throbber_state,
+        );
         self.ui
             .widget_areas
             .insert(FocusedComponent::Terminal, right_panel[1]);
@@ -352,20 +345,4 @@ impl Widget for &mut App<'_> {
         //            .style(Style::new().white().on_blue());
         //        popup.render(area, buf);
     }
-}
-
-fn render_scrollbar(area: Rect, buf: &mut Buffer, state: &mut ScrollbarState) {
-    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-        .begin_symbol(None)
-        .end_symbol(None)
-        .track_symbol(None)
-        .thumb_symbol("▐");
-    scrollbar.render(
-        area.inner(Margin {
-            vertical: 1,
-            horizontal: 1,
-        }),
-        buf,
-        state,
-    );
 }

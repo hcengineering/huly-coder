@@ -5,7 +5,9 @@ use rig::tool::Tool;
 
 use crate::tools::ask_followup_question::AskFollowupQuestionTool;
 use crate::tools::attempt_completion::AttemptCompletionTool;
-use crate::tools::execute_command::ExecuteCommandTool;
+use crate::tools::execute_command::tools::{
+    ExecuteCommandTool, GetCommandResultTool, TerminateCommandTool,
+};
 use crate::tools::list_files::ListFilesTool;
 use crate::tools::memory::{
     MemoryAddObservationsTool, MemoryCreateEntitiesTool, MemoryCreateRelationsTool,
@@ -66,6 +68,24 @@ pub fn get_tool_call_info(name: &str, args: &serde_json::Value) -> (String, Stri
                 "Execute command '{}'",
                 args.get("command")
                     .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+            ),
+        ),
+        GetCommandResultTool::NAME => (
+            "🖥️️",
+            format!(
+                "Get command result '{}'",
+                args.get("command_id")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or_default()
+            ),
+        ),
+        TerminateCommandTool::NAME => (
+            "🖥️️",
+            format!(
+                "Terminate command '{}'",
+                args.get("command_id")
+                    .and_then(|v| v.as_i64())
                     .unwrap_or_default()
             ),
         ),

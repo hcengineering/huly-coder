@@ -7,7 +7,10 @@ use crate::config::ProviderKind;
 use crate::providers::HulyAgent;
 use crate::tools::ask_followup_question::AskFollowupQuestionTool;
 use crate::tools::attempt_completion::AttemptCompletionTool;
-use crate::tools::execute_command::ExecuteCommandTool;
+use crate::tools::execute_command::tools::ExecuteCommandTool;
+use crate::tools::execute_command::tools::GetCommandResultTool;
+use crate::tools::execute_command::tools::TerminateCommandTool;
+use crate::tools::execute_command::ProcessRegistry;
 use crate::tools::list_files::ListFilesTool;
 use crate::tools::memory;
 use crate::tools::memory::Entity;
@@ -46,7 +49,6 @@ pub use event::AgentControlEvent;
 pub use event::AgentOutputEvent;
 use tokio::sync::RwLock;
 
-use self::event::AgentCommandStatus;
 use self::event::AgentState;
 use self::event::AgentStatus;
 use self::utils::*;
@@ -62,8 +64,17 @@ pub struct Agent {
     assistant_content: Option<String>,
     memory: Arc<RwLock<MemoryManager>>,
     memory_index: Option<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>,
+    process_registry: Arc<RwLock<ProcessRegistry>>,
     current_tokens: u32,
     state: AgentState,
+}
+
+struct BuildAgentContext<'a> {
+    config: &'a Config,
+    memory: Arc<RwLock<MemoryManager>>,
+    process_registry: Arc<RwLock<ProcessRegistry>>,
+    system_prompt: String,
+    sender: mpsc::UnboundedSender<AgentOutputEvent>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -91,6 +102,7 @@ impl Agent {
             assistant_content: None,
             current_tokens: 0,
             memory: Arc::new(RwLock::new(MemoryManager::new(false))),
+            process_registry: Arc::new(RwLock::new(ProcessRegistry::default())),
             memory_index: None,
             state: AgentState::Paused,
         }
@@ -112,28 +124,35 @@ impl Agent {
 
     fn add_static_tools<M>(
         agent_builder: AgentBuilder<M>,
-        config: &Config,
-        memory: Arc<RwLock<MemoryManager>>,
+        context: BuildAgentContext<'_>,
     ) -> AgentBuilder<M>
     where
         M: CompletionModel,
     {
         let mut agent_builder = agent_builder
-            .tool(ReadFileTool::new(config.workspace.to_path_buf()))
-            .tool(ListFilesTool::new(config.workspace.to_path_buf()))
-            .tool(WriteToFileTool::new(config.workspace.to_path_buf()))
-            .tool(ExecuteCommandTool::new(config.workspace.to_path_buf()))
-            .tool(ReplaceInFileTool::new(config.workspace.to_path_buf()))
-            .tool(SearchFilesTool::new(config.workspace.to_path_buf()))
+            .tool(ReadFileTool::new(context.config.workspace.to_path_buf()))
+            .tool(ListFilesTool::new(context.config.workspace.to_path_buf()))
+            .tool(WriteToFileTool::new(context.config.workspace.to_path_buf()))
+            .tool(ExecuteCommandTool::new(
+                context.config.workspace.to_path_buf(),
+                context.process_registry.clone(),
+                context.sender.clone(),
+            ))
+            .tool(GetCommandResultTool::new(context.process_registry.clone()))
+            .tool(TerminateCommandTool::new(context.process_registry.clone()))
+            .tool(ReplaceInFileTool::new(
+                context.config.workspace.to_path_buf(),
+            ))
+            .tool(SearchFilesTool::new(context.config.workspace.to_path_buf()))
             .tool(AskFollowupQuestionTool)
             .tool(AttemptCompletionTool);
-        if let Some(web_search) = config.web_search.as_ref() {
+        if let Some(web_search) = context.config.web_search.as_ref() {
             agent_builder = agent_builder.tool(WebSearchTool::new(web_search.clone()));
         }
-        if let Some(web_fetch) = config.web_fetch.as_ref() {
+        if let Some(web_fetch) = context.config.web_fetch.as_ref() {
             agent_builder = agent_builder.tool(WebFetchTool::new(web_fetch.clone()).unwrap());
         }
-        agent_builder = memory::add_memory_tools(agent_builder, memory);
+        agent_builder = memory::add_memory_tools(agent_builder, context.memory.clone());
 
         agent_builder
     }
@@ -213,82 +232,74 @@ impl Agent {
 
     async fn configure_agent<M>(
         mut agent_builder: AgentBuilder<M>,
-        config: &Config,
-        system_prompt: String,
-        memory: Arc<RwLock<MemoryManager>>,
+        context: BuildAgentContext<'_>,
     ) -> Result<AgentBuilder<M>>
     where
         M: CompletionModel,
     {
-        agent_builder = agent_builder.preamble(&system_prompt).temperature(0.0);
-        agent_builder = Self::add_static_tools(agent_builder, config, memory);
-        agent_builder = Self::add_mcp_tools(agent_builder, config.mcp.as_ref()).await?;
+        agent_builder = agent_builder
+            .preamble(&context.system_prompt)
+            .temperature(0.0);
+        let mcp_config = context.config.mcp.as_ref();
+        agent_builder = Self::add_static_tools(agent_builder, context);
+        agent_builder = Self::add_mcp_tools(agent_builder, mcp_config).await?;
         Ok(agent_builder)
     }
 
-    // TODO: refactor to use self
-    async fn build_agent(
-        config: &Config,
-        memory: Arc<RwLock<MemoryManager>>,
-        system_prompt: String,
-    ) -> Result<Box<dyn HulyAgent>> {
-        match config.provider {
+    async fn build_agent(context: BuildAgentContext<'_>) -> Result<Box<dyn HulyAgent>> {
+        match context.config.provider {
             ProviderKind::OpenAI => {
                 let agent_builder = rig::providers::openai::Client::new(
-                    &config
+                    &context
+                        .config
                         .provider_api_key
                         .clone()
                         .expect("provider_api_key is required for OpenAI"),
                 )
-                .agent(&config.model);
+                .agent(&context.config.model);
                 Ok(Box::new(
-                    Self::configure_agent(agent_builder, config, system_prompt, memory)
-                        .await?
-                        .build(),
+                    Self::configure_agent(agent_builder, context).await?.build(),
                 ))
             }
             ProviderKind::Anthropic => {
                 let agent_builder = rig::providers::anthropic::ClientBuilder::new(
-                    &config
+                    &context
+                        .config
                         .provider_api_key
                         .clone()
                         .expect("provider_api_key is required for Anthropic"),
                 )
                 .build()
-                .agent(&config.model);
+                .agent(&context.config.model);
                 Ok(Box::new(
-                    Self::configure_agent(agent_builder, config, system_prompt, memory)
-                        .await?
-                        .build(),
+                    Self::configure_agent(agent_builder, context).await?.build(),
                 ))
             }
             ProviderKind::OpenRouter => {
                 let agent_builder = crate::providers::openrouter::Client::new(
-                    &config
+                    &context
+                        .config
                         .provider_api_key
                         .clone()
                         .expect("provider_api_key is required for OpenRouter"),
                 )
-                .agent(&config.model);
+                .agent(&context.config.model);
                 Ok(Box::new(
-                    Self::configure_agent(agent_builder, config, system_prompt, memory)
-                        .await?
-                        .build(),
+                    Self::configure_agent(agent_builder, context).await?.build(),
                 ))
             }
             ProviderKind::LMStudio => {
                 let agent_builder = rig::providers::openai::Client::from_url(
                     "",
-                    &config
+                    &context
+                        .config
                         .provider_base_url
                         .clone()
                         .unwrap_or("http://127.0.0.1:1234/v1".to_string()),
                 )
-                .agent(&config.model);
+                .agent(&context.config.model);
                 Ok(Box::new(
-                    Self::configure_agent(agent_builder, config, system_prompt, memory)
-                        .await?
-                        .build(),
+                    Self::configure_agent(agent_builder, context).await?.build(),
                 ))
             }
         }
@@ -404,18 +415,6 @@ impl Agent {
                             }
                         };
 
-                        if tool_call.function.name == ExecuteCommandTool::NAME {
-                            let command = tool_call.function.arguments.as_object().unwrap()
-                                ["command"]
-                                .as_str()
-                                .unwrap();
-                            self.sender
-                                .send(AgentOutputEvent::ExecuteCommand(AgentCommandStatus {
-                                    command: command.to_string(),
-                                    output: tool_result.clone(),
-                                }))
-                                .unwrap();
-                        }
                         tracing::trace!("tool_result: '{}'", tool_result);
                         if (tool_result.is_empty() || tool_result == "\"\"")
                             && tool_call.function.name != AttemptCompletionTool::NAME
@@ -462,8 +461,13 @@ impl Agent {
                                 tracing::info!("Stop task with success");
                                 persist_history(&self.messages);
                             } else {
-                                add_env_message(&mut result_message, None, &self.config.workspace)
-                                    .await;
+                                add_env_message(
+                                    &mut result_message,
+                                    None,
+                                    &self.config.workspace,
+                                    self.process_registry.clone(),
+                                )
+                                .await;
                                 self.add_message(result_message);
                             }
                         }
@@ -503,9 +507,15 @@ impl Agent {
         let system_prompt =
             prepare_system_prompt(&self.config.workspace, &self.config.user_instructions).await;
         self.agent = Some(
-            Self::build_agent(&self.config, self.memory.clone(), system_prompt)
-                .await
-                .unwrap(),
+            Self::build_agent(BuildAgentContext {
+                config: &self.config,
+                system_prompt,
+                memory: self.memory.clone(),
+                process_registry: self.process_registry.clone(),
+                sender: self.sender.clone(),
+            })
+            .await
+            .unwrap(),
         );
         // restore state from messages
         self.set_state(if self.messages.is_empty() {
@@ -526,6 +536,13 @@ impl Agent {
             }
         });
         while !self.sender.is_closed() {
+            let modified_command_states = self.process_registry.write().await.poll();
+            if !modified_command_states.is_empty() {
+                self.sender
+                    .send(AgentOutputEvent::CommandStatus(modified_command_states))
+                    .ok();
+            }
+
             if let Ok(event) = self.receiver.try_recv() {
                 match event {
                     AgentControlEvent::SendMessage(message) => {
@@ -575,6 +592,7 @@ impl Agent {
             &mut message,
             self.memory_index.as_ref(),
             &self.config.workspace,
+            self.process_registry.clone(),
         )
         .await;
         self.add_message(message);

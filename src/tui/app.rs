@@ -56,22 +56,28 @@ impl From<u8> for FocusedComponent {
 pub struct ModelState {
     pub messages: Vec<Message>,
     pub agent_status: AgentStatus,
-    pub execute_command: AgentCommandStatus,
+    pub terminal_statuses: Vec<AgentCommandStatus>,
     pub last_error: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct TerminalState {
+    pub selected_idx: usize,
+    pub scroll_state: ScrollbarState,
+    pub scroll_position: u16,
 }
 
 #[derive(Debug)]
 pub struct UiState<'a> {
     pub textarea: TextArea<'a>,
     pub focus: FocusedComponent,
-    pub terminal_scroll_state: ScrollbarState,
-    pub terminal_scroll_position: u16,
     pub tree_state: FileTreeState,
     pub history_scroll_state: ScrollbarState,
     pub history_state: ListState,
     pub history_opened_state: HashSet<usize>,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
     pub widget_areas: HashMap<FocusedComponent, Rect>,
+    pub terminal_state: TerminalState,
 }
 
 #[derive(Debug)]
@@ -91,13 +97,12 @@ impl UiState<'_> {
             textarea: TextArea::default(),
             focus: FocusedComponent::Input,
             history_scroll_state: ScrollbarState::default(),
-            terminal_scroll_state: ScrollbarState::default(),
-            terminal_scroll_position: 0,
             tree_state: FileTreeState::new(workspace),
             history_state: ListState::default(),
             history_opened_state: HashSet::default(),
             throbber_state: throbber_widgets_tui::ThrobberState::default(),
             widget_areas: HashMap::default(),
+            terminal_state: TerminalState::default(),
         }
     }
 }
@@ -163,8 +168,8 @@ impl App<'_> {
                                     );
                                 }
                                 FocusedComponent::Terminal => {
-                                    Self::handle_scroll_input(
-                                        &mut self.ui.terminal_scroll_position,
+                                    Self::handle_terminal_input(
+                                        &mut self.ui.terminal_state,
                                         &event,
                                     );
                                 }
@@ -203,8 +208,8 @@ impl App<'_> {
                                     );
                                 }
                                 FocusedComponent::Terminal => {
-                                    Self::handle_scroll_input(
-                                        &mut self.ui.terminal_scroll_position,
+                                    Self::handle_terminal_input(
+                                        &mut self.ui.terminal_state,
                                         &event,
                                     );
                                 }
@@ -235,8 +240,23 @@ impl App<'_> {
                                 self.ui.history_state.select(Some(len));
                             }
                         }
-                        AgentOutputEvent::ExecuteCommand(status) => {
-                            self.model.execute_command = status;
+                        AgentOutputEvent::CommandStatus(status) => {
+                            for state in status {
+                                if let Some(st) = self
+                                    .model
+                                    .terminal_statuses
+                                    .iter_mut()
+                                    .find(|t| t.command_id == state.command_id)
+                                {
+                                    st.is_active = state.is_active;
+                                    st.output = state.output;
+                                } else {
+                                    self.model.terminal_statuses.push(state);
+                                    self.ui.terminal_state.scroll_position = 0;
+                                    self.ui.terminal_state.selected_idx =
+                                        self.model.terminal_statuses.len() - 1;
+                                }
+                            }
                         }
                         AgentOutputEvent::AgentStatus(status) => {
                             tracing::info!("agent_status: {:?}", status);
@@ -304,22 +324,6 @@ impl App<'_> {
         }
     }
 
-    fn handle_scroll_input(scroll_position: &mut u16, event: &crossterm::event::Event) {
-        if let crossterm::event::Event::Key(key_event) = event {
-            if key_event.kind == KeyEventKind::Press {
-                match key_event.code {
-                    KeyCode::Down => {
-                        *scroll_position = scroll_position.saturating_add(1);
-                    }
-                    KeyCode::Up => {
-                        *scroll_position = scroll_position.saturating_sub(1);
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
     fn handle_tree_input(state: &mut FileTreeState, event: &crossterm::event::Event) {
         if let crossterm::event::Event::Key(key_event) = event {
             if key_event.kind == KeyEventKind::Press {
@@ -336,6 +340,29 @@ impl App<'_> {
                     }
                     KeyCode::Left => {
                         state.tree_state.key_left();
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn handle_terminal_input(terminal_state: &mut TerminalState, event: &crossterm::event::Event) {
+        if let crossterm::event::Event::Key(key_event) = event {
+            if key_event.kind == KeyEventKind::Press {
+                match key_event.code {
+                    KeyCode::Char(ch) if ch.is_ascii_digit() => {
+                        let idx = ch.to_digit(10).unwrap() as usize;
+                        terminal_state.selected_idx = idx - 1;
+                        terminal_state.scroll_position = 0;
+                    }
+                    KeyCode::Down => {
+                        terminal_state.scroll_position =
+                            terminal_state.scroll_position.saturating_add(1);
+                    }
+                    KeyCode::Up => {
+                        terminal_state.scroll_position =
+                            terminal_state.scroll_position.saturating_sub(1);
                     }
                     _ => {}
                 }

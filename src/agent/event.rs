@@ -53,8 +53,10 @@ pub struct AgentStatus {
 /// Status of a command tool call
 #[derive(Clone, Debug, Default)]
 pub struct AgentCommandStatus {
-    pub command: String,
+    pub command_id: usize,
+    pub command: Option<String>,
     pub output: String,
+    pub is_active: bool,
 }
 
 /// Events that are sent from the agent to UI
@@ -63,7 +65,7 @@ pub enum AgentOutputEvent {
     AddMessage(Message),
     UpdateMessage(Message),
     NewTask,
-    ExecuteCommand(AgentCommandStatus),
+    CommandStatus(Vec<AgentCommandStatus>),
     AgentStatus(AgentStatus),
     HighlightFile(String, bool),
 }

@@ -55,6 +55,7 @@ fn init_logger() {
                         .with_target("mio", tracing::Level::WARN)
                         .with_target("ort", tracing::Level::WARN)
                         .with_target("tokenizers", tracing::Level::WARN)
+                        .with_target("process_wrap", tracing::Level::INFO)
                         .with_default(tracing::Level::TRACE),
                 ),
         )
@@ -114,7 +115,7 @@ async fn main() -> color_eyre::Result<()> {
     );
     agent.init_memory_index().await;
 
-    tokio::spawn(async move {
+    let agent_handler = tokio::spawn(async move {
         agent.run().await;
     });
 
@@ -122,6 +123,7 @@ async fn main() -> color_eyre::Result<()> {
     let result = tui::App::new(config, control_sender, output_receiver, history)
         .run(terminal)
         .await;
+    let _ = agent_handler.await;
     ratatui::restore();
     result
 }

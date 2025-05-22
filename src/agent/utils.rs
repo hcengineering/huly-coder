@@ -2,12 +2,16 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
+use itertools::Itertools;
 use rig::message::{Message, UserContent};
 use rig::vector_store::in_memory_store::InMemoryVectorIndex;
 use rig::vector_store::VectorStoreIndex;
+use tokio::sync::RwLock;
 
 use crate::templates::{ENV_DETAILS, SYSTEM_PROMPT};
+use crate::tools::execute_command::ProcessRegistry;
 use crate::tools::memory::Entity;
 
 pub const MAX_FILES: usize = 10000;
@@ -45,6 +49,7 @@ pub async fn add_env_message<'a>(
     msg: &'a mut Message,
     memory_index: Option<&'a InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>,
     workspace: &'a Path,
+    process_registry: Arc<RwLock<ProcessRegistry>>,
 ) {
     let workspace = workspace.as_os_str().to_str().unwrap().replace("\\", "/");
     let mut files: Vec<String> = Vec::default();
@@ -83,6 +88,27 @@ pub async fn add_env_message<'a>(
                 memory_entries = serde_yaml::to_string(&result).unwrap();
             }
         }
+        let commands = process_registry
+            .read()
+            .await
+            .processes()
+            .map(|(id, status, command)| {
+                format!(
+                    "| {}    | {}                 | `{}` |",
+                    id,
+                    if let Some(exit_status) = status {
+                        if let Some(code) = exit_status.code() {
+                            format!("Exited({})", code)
+                        } else {
+                            "Exited(-1)".to_string()
+                        }
+                    } else {
+                        "Running".to_string()
+                    },
+                    command
+                )
+            })
+            .join("\n");
         content.push(UserContent::text(
             subst::substitute(
                 ENV_DETAILS,
@@ -90,6 +116,7 @@ pub async fn add_env_message<'a>(
                     ("TIME", chrono::Local::now().to_rfc2822().as_str()),
                     ("WORKING_DIR", &workspace),
                     ("MEMORY_ENTRIES", &memory_entries),
+                    ("COMMANDS", &commands),
                     ("FILES", files),
                 ]),
             )

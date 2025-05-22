@@ -40,6 +40,7 @@ ignore = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 paste = "1.0.15"
 heck = "0.5.0"
+process-wrap = { version = "8.2.1", features = ["tokio1"] }
 
 # web search and fetch related
 percent-encoding = "2.3.1"

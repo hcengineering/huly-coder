@@ -5,6 +5,11 @@ ${TIME}
 # Relevant Memory Entries
 ${MEMORY_ENTRIES}
 
+## Active Commands
+| Command ID | Status (Running/Exited) | Command |
+|------------|-------------------------|---------|
+${COMMANDS}
+
 # Current Working Directory (${WORKING_DIR}) Files
 ${FILES}
 </environment_details>
