@@ -1,46 +1,79 @@
-#
-# You can override config in ~\huly-coder.yaml file 
-# or huly-coder-local.yaml file
-#
+# Huly-Coder Configuration
+# -----------------------
+# This configuration can be overridden in:
+# - ~/huly-coder.yaml
+# - huly-coder-local.yaml
 
-### Example Anthropic config
-# provider: Anthropic
-# model: claude-3-5-sonnet-latest
-# provider_api_key: sk-xxxxxxxxxxxxxxxxxxxxx
-
-#provider: LMStudio
+#---------------------------------------
+# AI Provider Configuration
+#---------------------------------------
+# Supported providers:
+# - OpenRouter (default)
+# - Anthropic
+# - OpenAI
+# - LMStudio
 provider: OpenRouter
-#model: qwen3-8b
-#model: deepseek-r1-distill-llama-8b
-#model: gpt-4o
+
+# Model Configuration
+# Available models depend on the selected provider
+# OpenRouter models:
+# - anthropic/claude-3.5-sonnet (default)
+# - gpt-4o
+# Local models:
+# - qwen3-8b
+# - deepseek-r1-distill-llama-8b
 model: anthropic/claude-3.5-sonnet
+
+# Provider API Configuration
 #provider_api_key: sk-xxxxxxxxxxxxxxxxxxxxx
 #provider_base_url: http://127.0.0.1:1234/v1
+
+#---------------------------------------
+# Workspace Configuration
+#---------------------------------------
 workspace: ./target/workspace
+
+#---------------------------------------
+# Web Interaction Configuration
+#---------------------------------------
+# Web Fetch Options:
+# - direct (default): Direct web access
+# - chrome: Use Chrome browser
+web_fetch: direct
+
+# Web Search Configuration
+# Web Search Options:
+# - Brave Search (default)
+#    type: brave
+#    api_key: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# - SearX (alternative)
+#    type: searx
+#    url: http://localhost:8080/
+web_search:
+  type: brave
+  api_key: BSAnIRlUpQfYjLAs4Dt23DvQyr24vL3
+
+#---------------------------------------
+# MCP (Model Context Protocol) Configuration
+#---------------------------------------
 #mcp:
 #  servers:
-#    # simple MCP server from https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
+#    # Fetch server configuration
 #    fetch:
 #      type: stdio
 #      command: docker
 #      args: [ "run", "-i", "--rm", "mcp/fetch", "--ignore-robots-txt" ]
 #      protocol_version: 2024-11-05
+#    
+#    # Weather server configuration
 #    weather:
 #      type: sse
 #      url: http://127.0.0.1:8080/sse
 #      protocol_version: 2024-11-05
 
-web_fetch: direct
-#web_fetch: chrome
-
-#web_search:
-#  type: searx
-#  url: http://localhost:8080/
-
-web_search:
-  type: brave
-  api_key: BSAnIRlUpQfYjLAs4Dt23DvQyr24vL3
-
+#---------------------------------------
+# AI Assistant Personality Configuration
+#---------------------------------------
 user_instructions: |
-  You are dedicated software engineer working alone. You’re free to choose any technology, approach, and solution. 
+  You are dedicated software engineer working alone. You're free to choose any technology, approach, and solution. 
   If in doubt please choose the best way you think. Your goal is to build working software based on user request.

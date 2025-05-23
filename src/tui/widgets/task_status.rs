@@ -25,6 +25,7 @@ impl TaskStatusWidget {
             .border_set(symbols::border::FULL)
             .border_style(theme.border_style(false))
             .style(Style::default().bg(theme.border));
+        let max_len = area.width.saturating_sub(5) as usize;
         let (icon, message) = match state {
             AgentState::ToolCall(tool, args) => {
                 let (icon, info) = tool_info::get_tool_call_info(tool, args);
@@ -48,7 +49,14 @@ impl TaskStatusWidget {
                 )
             }
             AgentState::WaitingUserPrompt => (Span::from("✍️"), Span::raw("Waiting user prompt")),
-            AgentState::Error(msg) => (Span::from("⚠️"), Span::raw(msg)),
+            AgentState::Error(msg) => (
+                Span::from("⚠️"),
+                Span::raw(if msg.len() > max_len {
+                    format!("{}...", &msg[..max_len - 3])
+                } else {
+                    msg.to_string()
+                }),
+            ),
             AgentState::Completed(_) => (Span::from("✅"), Span::raw("Completed")),
         };
 

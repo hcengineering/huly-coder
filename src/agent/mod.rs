@@ -1,3 +1,4 @@
+use std::fmt::Display;
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::sync::Arc;
 
@@ -79,10 +80,17 @@ struct BuildAgentContext<'a> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
-    #[error("ToolSetError: {0}")]
     ToolSetError(#[from] ToolSetError),
-    #[error("CompletionError: {0}")]
     CompletionError(#[from] CompletionError),
+}
+
+impl Display for AgentError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ToolSetError(e) => write!(f, "{e}"),
+            Self::CompletionError(e) => write!(f, "CompletionError: {e}"),
+        }
+    }
 }
 
 impl Agent {
@@ -270,7 +278,8 @@ impl Agent {
                         .expect("provider_api_key is required for Anthropic"),
                 )
                 .build()
-                .agent(&context.config.model);
+                .agent(&context.config.model)
+                .max_tokens(20000);
                 Ok(Box::new(
                     Self::configure_agent(agent_builder, context).await?.build(),
                 ))
@@ -482,9 +491,11 @@ impl Agent {
                 let response: CompletionResponse<
                     Option<rig::providers::openai::StreamingCompletionResponse>,
                 > = From::from(self.stream.take().unwrap());
-                let usage = response.raw_response.unwrap().usage;
-                tracing::info!("Usage: {:?}", usage);
-                self.current_tokens = usage.total_tokens as u32;
+                if let Some(raw_response) = response.raw_response {
+                    let usage = raw_response.usage;
+                    tracing::info!("Usage: {:?}", usage);
+                    self.current_tokens = usage.total_tokens as u32;
+                }
                 self.assistant_content = None;
                 if matches!(self.state, AgentState::Completed(false)) {
                     self.set_state(AgentState::Completed(true));
@@ -570,7 +581,7 @@ impl Agent {
                 tracing::debug!("persist_history");
                 persist_history(&self.messages);
                 tracing::error!("Error processing messages: {}", e);
-                self.set_state(AgentState::Error(format!("Error: {}", e)));
+                self.set_state(AgentState::Error(format!("{e}")));
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
