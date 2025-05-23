@@ -40,7 +40,11 @@ struct LayoutRects {
     shortcuts_area: Rect,
 }
 
-fn build_layout(area: Rect, errors: &Option<String>) -> LayoutRects {
+fn build_layout(
+    area: Rect,
+    errors: &Option<String>,
+    textarea: &tui_textarea::TextArea,
+) -> LayoutRects {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -69,16 +73,21 @@ fn build_layout(area: Rect, errors: &Option<String>) -> LayoutRects {
         .map(|s| textwrap::wrap(s, left_area.width as usize - 5).len())
         .unwrap_or(0);
 
+    let input_text_lines_count = textarea
+        .lines()
+        .iter()
+        .map(|s| textwrap::wrap(s, left_area.width as usize - 5).len())
+        .sum::<usize>() as u16;
     // Left panel (chat history + input)
     let (task_area, chat_area, error_area, status_area, input_area) = if error_lines_count > 0 {
         let rects = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4),                                   // Task panel
-                Constraint::Fill(3),                                     // Chat history
-                Constraint::Max(u16::min(10, error_lines_count as u16)), // Error message
-                Constraint::Length(1),                                   // Task progress status
-                Constraint::Length(3),                                   // Input field
+                Constraint::Length(4),                                 // Task panel
+                Constraint::Fill(3),                                   // Chat history
+                Constraint::Max(10.min(error_lines_count as u16)),     // Error message
+                Constraint::Length(1),                                 // Task progress status
+                Constraint::Length(6.min(input_text_lines_count) + 1), // Input field
             ])
             .split(left_area);
         (rects[0], rects[1], rects[2], rects[3], rects[4])
@@ -86,10 +95,10 @@ fn build_layout(area: Rect, errors: &Option<String>) -> LayoutRects {
         let rects = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4), // Task panel
-                Constraint::Min(3),    // Chat history
-                Constraint::Length(1), // Task progress status
-                Constraint::Length(3), // Input field
+                Constraint::Length(4),                                 // Task panel
+                Constraint::Min(3),                                    // Chat history
+                Constraint::Length(1),                                 // Task progress status
+                Constraint::Length(6.min(input_text_lines_count) + 1), // Input field
             ])
             .split(left_area);
         (rects[0], rects[1], Rect::default(), rects[2], rects[3])
@@ -126,7 +135,7 @@ impl Widget for &mut App<'_> {
 
         buf.set_style(area, Style::default().bg(theme.background).fg(theme.text));
 
-        let layout = build_layout(area, &self.model.last_error);
+        let layout = build_layout(area, &self.model.last_error, &self.ui.textarea);
 
         ToolbarWidget.render(layout.toolbar_area, buf, &theme, &self.config);
 
@@ -265,6 +274,8 @@ impl Widget for &mut App<'_> {
         // Create a TextArea with the App's input text
         self.ui.textarea.set_block(input_block);
         self.ui.textarea.set_style(theme.text_style());
+        self.ui.textarea.set_wrap(true);
+        self.ui.textarea.set_cursor_line_style(theme.text_style());
         self.ui
             .textarea
             .set_placeholder_style(theme.inactive_style());
