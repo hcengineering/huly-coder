@@ -14,7 +14,7 @@ use super::{normalize_path, AgentToolError};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListFilesToolArgs {
     pub path: String,
-    pub recursive: Option<bool>,
+    pub max_depth: Option<usize>,
 }
 
 pub struct ListFilesTool {
@@ -38,10 +38,10 @@ impl Tool for ListFilesTool {
         ToolDefinition {
             name: self.name(),
             description: formatdoc! {"\
-                Request to list files and directories within the specified directory. If recursive is true, it will list \
-                all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents. \
-                Do not use this tool to confirm the existence of files you may have created, as the user will let you know \
-                if the files were created successfully or not."}.to_string(),
+                Request to list files and directories within the specified directory. If max_depth equals 1 or not provided, \
+                it will only list the top-level contents. If max_depth is greater than 1, it will list the contents of the directory \
+                and its subdirectories up to the specified depth. Do not use this tool to confirm the existence of files you may have created,\
+                as the user will let you know if the files were created successfully or not."}.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -50,9 +50,9 @@ impl Tool for ListFilesTool {
                         "description": formatdoc!{"The path of the directory to list contents for (relative to the current \
                                                    working directory {})", workspace_to_string(&self.workspace)},
                     },
-                    "recursive": {
-                        "type": "boolean",
-                        "description": "Whether to list files recursively. Use true for recursive listing, false or omit for top-level only."
+                    "max_depth": {
+                        "type": "number",
+                        "description": "Max depth to list files (default: 1)",
                     }
                 },
                 "required": ["path"]
@@ -63,10 +63,10 @@ impl Tool for ListFilesTool {
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         let path = normalize_path(&self.workspace, &args.path);
-        let recursive = args.recursive.unwrap_or(false);
+        let max_depth = args.max_depth.unwrap_or(1);
         let mut files: Vec<String> = Vec::default();
         for entry in ignore::WalkBuilder::new(path.clone())
-            .max_depth(if recursive { None } else { Some(1) })
+            .max_depth(Some(max_depth))
             .filter_entry(|e| e.file_name() != "node_modules")
             .build()
             .filter_map(|e| e.ok())

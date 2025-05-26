@@ -10,6 +10,6 @@ ${MEMORY_ENTRIES}
 |------------|-------------------------|---------|
 ${COMMANDS}
 
-# Current Working Directory (${WORKING_DIR}) Files
+# Current Working Directory (${WORKING_DIR}) Files (max depth 2)
 ${FILES}
 </environment_details>

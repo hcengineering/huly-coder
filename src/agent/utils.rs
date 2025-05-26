@@ -56,6 +56,7 @@ pub async fn add_env_message<'a>(
 
     for entry in ignore::WalkBuilder::new(&workspace)
         .filter_entry(|e| e.file_name() != "node_modules")
+        .max_depth(Some(2))
         .build()
         .filter_map(|e| e.ok())
         .take(MAX_FILES)
@@ -81,9 +82,16 @@ pub async fn add_env_message<'a>(
         let text = content.first();
         let mut memory_entries = String::new();
         if let Some(memory_index) = memory_index {
-            if let UserContent::Text(text) = text {
-                let res: Vec<(f64, String, Entity)> =
-                    memory_index.top_n(&text.text, 10).await.unwrap();
+            let txt = match text {
+                UserContent::Text(text) => &text.text.to_string(),
+                UserContent::ToolResult(tool_result) => match tool_result.content.first() {
+                    rig::message::ToolResultContent::Text(text) => &text.text.to_string(),
+                    rig::message::ToolResultContent::Image(_) => "",
+                },
+                _ => "",
+            };
+            if !txt.is_empty() {
+                let res: Vec<(f64, String, Entity)> = memory_index.top_n(txt, 10).await.unwrap();
                 let result: Vec<_> = res.into_iter().map(|(_, _, entity)| entity).collect();
                 memory_entries = serde_yaml::to_string(&result).unwrap();
             }

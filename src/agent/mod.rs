@@ -25,6 +25,7 @@ use crate::tools::write_to_file::WriteToFileTool;
 use crate::Config;
 use anyhow::Result;
 use futures::StreamExt;
+use itertools::Itertools;
 use mcp_core::types::ProtocolVersion;
 use rig::agent::AgentBuilder;
 use rig::completion::CompletionError;
@@ -93,8 +94,8 @@ impl Display for AgentError {
     }
 }
 
-fn count_tokens(system_prompt: &str) -> u32 {
-    system_prompt.len() as u32 / 4
+fn count_tokens(text: &str) -> u32 {
+    text.len() as u32 / 4
 }
 
 impl Agent {
@@ -246,7 +247,8 @@ impl Agent {
     async fn configure_agent<M>(
         mut agent_builder: AgentBuilder<M>,
         context: BuildAgentContext<'_>,
-    ) -> Result<AgentBuilder<M>>
+        tools_tokens: &mut u32,
+    ) -> Result<rig::agent::Agent<M>>
     where
         M: CompletionModel,
     {
@@ -256,10 +258,24 @@ impl Agent {
         let mcp_config = context.config.mcp.as_ref();
         agent_builder = Self::add_static_tools(agent_builder, context);
         agent_builder = Self::add_mcp_tools(agent_builder, mcp_config).await?;
-        Ok(agent_builder)
+        let agent = agent_builder.build();
+        *tools_tokens = count_tokens(
+            &agent
+                .tools
+                .documents()
+                .await
+                .unwrap()
+                .iter()
+                .map(|d| &d.text)
+                .join("\n"),
+        );
+        Ok(agent)
     }
 
-    async fn build_agent(context: BuildAgentContext<'_>) -> Result<Box<dyn HulyAgent>> {
+    async fn build_agent(
+        context: BuildAgentContext<'_>,
+        tools_tokens: &mut u32,
+    ) -> Result<Box<dyn HulyAgent>> {
         match context.config.provider {
             ProviderKind::OpenAI => {
                 let agent_builder = rig::providers::openai::Client::new(
@@ -271,7 +287,7 @@ impl Agent {
                 )
                 .agent(&context.config.model);
                 Ok(Box::new(
-                    Self::configure_agent(agent_builder, context).await?.build(),
+                    Self::configure_agent(agent_builder, context, tools_tokens).await?,
                 ))
             }
             ProviderKind::Anthropic => {
@@ -286,7 +302,7 @@ impl Agent {
                 .agent(&context.config.model)
                 .max_tokens(20000);
                 Ok(Box::new(
-                    Self::configure_agent(agent_builder, context).await?.build(),
+                    Self::configure_agent(agent_builder, context, tools_tokens).await?,
                 ))
             }
             ProviderKind::OpenRouter => {
@@ -299,7 +315,7 @@ impl Agent {
                 )
                 .agent(&context.config.model);
                 Ok(Box::new(
-                    Self::configure_agent(agent_builder, context).await?.build(),
+                    Self::configure_agent(agent_builder, context, tools_tokens).await?,
                 ))
             }
             ProviderKind::LMStudio => {
@@ -313,7 +329,7 @@ impl Agent {
                 )
                 .agent(&context.config.model);
                 Ok(Box::new(
-                    Self::configure_agent(agent_builder, context).await?.build(),
+                    Self::configure_agent(agent_builder, context, tools_tokens).await?,
                 ))
             }
         }
@@ -332,6 +348,16 @@ impl Agent {
         self.sender
             .send(AgentOutputEvent::AddMessage(message.clone()))
             .unwrap();
+        if let Message::User { .. } = &message {
+            // clear previous messages from env details
+            self.messages.iter_mut().for_each(|m| {
+                if let Message::User { content, .. } = m {
+                    if content.len() > 1 {
+                        *content = OneOrMany::one(content.first());
+                    }
+                }
+            });
+        }
         self.messages.push(message);
     }
 
@@ -477,7 +503,7 @@ impl Agent {
                             } else {
                                 add_env_message(
                                     &mut result_message,
-                                    None,
+                                    self.memory_index.as_ref(),
                                     &self.config.workspace,
                                     self.process_registry.clone(),
                                 )
@@ -565,17 +591,23 @@ impl Agent {
         let system_prompt =
             prepare_system_prompt(&self.config.workspace, &self.config.user_instructions).await;
         let system_prompt_token_count = count_tokens(&system_prompt);
+        let mut tools_tokens = 0;
         self.agent = Some(
-            Self::build_agent(BuildAgentContext {
-                config: &self.config,
-                system_prompt,
-                memory: self.memory.clone(),
-                process_registry: self.process_registry.clone(),
-                sender: self.sender.clone(),
-            })
+            Self::build_agent(
+                BuildAgentContext {
+                    config: &self.config,
+                    system_prompt,
+                    memory: self.memory.clone(),
+                    process_registry: self.process_registry.clone(),
+                    sender: self.sender.clone(),
+                },
+                &mut tools_tokens,
+            )
             .await
             .unwrap(),
         );
+        // This is workaround to calculate tokens from system prompt and tools for providers like LMStudio
+        let system_prompt_token_count = system_prompt_token_count + tools_tokens / 2;
         // restore state from messages
         self.set_state(if self.messages.is_empty() {
             AgentState::WaitingUserPrompt

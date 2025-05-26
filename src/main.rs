@@ -57,7 +57,7 @@ fn init_logger() {
                         .with_target("ort", tracing::Level::WARN)
                         .with_target("tokenizers", tracing::Level::WARN)
                         .with_target("process_wrap", tracing::Level::INFO)
-                        .with_default(tracing::Level::TRACE),
+                        .with_default(tracing::Level::DEBUG),
                 ),
         )
         .init()

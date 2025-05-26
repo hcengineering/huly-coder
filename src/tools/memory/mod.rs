@@ -244,6 +244,9 @@ impl MemoryManager {
                     self.knowledge_graph
                         .entities
                         .retain(|entity| entity.name != entity_name);
+                    self.knowledge_graph.relations.retain(|relation| {
+                        relation.from != entity_name || relation.to != entity_name
+                    });
                 }
                 self.save();
                 Ok("Entities deleted successfully".to_string())
