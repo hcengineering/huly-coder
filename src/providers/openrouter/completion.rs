@@ -151,7 +151,7 @@ impl CompletionModel {
             .into_iter()
             .map(|ref m| match m {
                 Message::Assistant {
-                    content: _,
+                    content,
                     refusal: _,
                     audio: _,
                     name: _,
@@ -164,7 +164,13 @@ impl CompletionModel {
                             "tool_calls": tool_calls,
                         })
                     } else {
-                        json!(m)
+                        json!({
+                            "role": "assistant",
+                            "content": match content.first().unwrap() {
+                                AssistantContent::Text { text } => text,
+                                _ => "",
+                            },
+                        })
                     }
                 }
                 Message::ToolResult {

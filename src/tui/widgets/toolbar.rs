@@ -22,13 +22,20 @@ impl ToolbarWidget {
         let toolbar_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(15),  // Title
+                Constraint::Length(20),  // Title
                 Constraint::Ratio(2, 3), // Context length
                 Constraint::Ratio(1, 3), // Model
             ])
             .split(area);
 
-        Span::styled(" Huly Coder ", Style::default().fg(theme.focus))
+        Line::default()
+            .spans([
+                Span::styled(" Huly Coder ", Style::default().fg(theme.focus)),
+                Span::styled(
+                    format!("v{}", env!("CARGO_PKG_VERSION")),
+                    Style::default().fg(theme.inactive_text),
+                ),
+            ])
             .render(toolbar_layout[0], buf);
 
         let toolbar_text = Line::from(vec![

@@ -43,13 +43,6 @@ impl Display for AgentState {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct AgentStatus {
-    pub current_tokens: u32,
-    pub max_tokens: u32,
-    pub state: AgentState,
-}
-
 /// Status of a command tool call
 #[derive(Clone, Debug, Default)]
 pub struct AgentCommandStatus {
@@ -66,7 +59,7 @@ pub enum AgentOutputEvent {
     UpdateMessage(Message),
     NewTask,
     CommandStatus(Vec<AgentCommandStatus>),
-    AgentStatus(AgentStatus),
+    AgentStatus(u32, u32, AgentState),
     HighlightFile(String, bool),
 }
 

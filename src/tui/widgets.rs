@@ -2,12 +2,12 @@
 pub mod filetree;
 mod message;
 mod shortcuts;
+mod task_info;
 mod task_status;
 mod terminal;
 mod toolbar;
 
 use crate::tui::App;
-use ratatui::layout::{Margin, Offset};
 use ratatui::prelude::StatefulWidget;
 use ratatui::widgets::Widget;
 use ratatui::{
@@ -18,6 +18,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Padding, Paragraph, Scrollbar, ScrollbarOrientation},
 };
 use shortcuts::ShortcutsWidget;
+use task_info::TaskInfoWidget;
 use toolbar::ToolbarWidget;
 use tui_widget_list::{ListBuilder, ListView, ScrollAxis};
 
@@ -139,60 +140,14 @@ impl Widget for &mut App<'_> {
 
         ToolbarWidget.render(layout.toolbar_area, buf, &theme, &self.config);
 
-        // Task block
-        let task_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(2), // Task name
-                Constraint::Length(1), // Status of task
-            ])
-            .split(
-                layout
-                    .task_area
-                    .inner(Margin::new(2, 0))
-                    .offset(Offset { x: 0, y: 1 }),
-            );
-
-        let _task_status_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Fill(10), // Status of task
-                Constraint::Min(20),  // Task name
-                Constraint::Min(10),  // Empty
-            ])
-            .split(task_layout[1]);
-
-        Block::bordered()
-            .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-            .title(" Current Task ")
-            .title_alignment(Alignment::Right)
-            .title_style(theme.primary_style())
-            .padding(Padding::horizontal(1))
-            .border_type(BorderType::Rounded)
-            .border_style(theme.border_style(false))
-            .render(layout.task_area, buf);
-
-        Paragraph::new(self.current_task_text()).render(task_layout[0], buf);
-        //        let progress_value = self.model.task_status.current_tokens as f64
-        //            / f64::max(
-        //                self.model.task_status.current_tokens as f64,
-        //                f64::max(1.0, self.model.task_status.max_tokens as f64),
-        //            );
-        //
-        //        LineGauge::default()
-        //            .filled_style(Style::default().fg(Color::Blue))
-        //            .unfilled_style(Style::default().fg(Color::DarkGray))
-        //            .line_set(symbols::line::ROUNDED)
-        //            .label(format!(
-        //                "{}/{}",
-        //                format_num!(".2s", self.model.task_status.current_tokens),
-        //                format_num!(".2s", self.model.task_status.max_tokens)
-        //            ))
-        //            .ratio(progress_value)
-        //            .render(task_status_layout[0], buf);
-        //        Paragraph::new("API Cost: $1.7681")
-        //            .right_aligned()
-        //            .render(task_status_layout[1], buf);
+        // Task info block
+        TaskInfoWidget.render(
+            layout.task_area,
+            buf,
+            &theme,
+            &self.model.agent_status,
+            &self.current_task_text(),
+        );
 
         // Chat history
         let chat_block = Block::bordered()
@@ -206,6 +161,7 @@ impl Widget for &mut App<'_> {
 
         let chat_len = self.model.messages.len();
         self.ui.history_scroll_state = self.ui.history_scroll_state.content_length(chat_len);
+
         let builder = ListBuilder::new(|context| {
             let item = MessageWidget::new(
                 &self.model.messages[context.index],

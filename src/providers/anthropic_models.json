@@ -1,0 +1,44 @@
+[
+    {
+        "model_id": "claude-opus-4",
+        "input_price": 0.000015,
+        "output_price": 0.000075,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "claude-sonnet-4",
+        "input_price": 0.000003,
+        "output_price": 0.000015,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "claude-sonnet-3.7",
+        "input_price": 0.000003,
+        "output_price": 0.000015,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "claude-sonnet-3.5",
+        "input_price": 0.000003,
+        "output_price": 0.000015,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "claude-haiku-3.5",
+        "input_price": 0.0000008,
+        "output_price": 0.000004,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "claude-opus-3",
+        "input_price": 0.000015,
+        "output_price": 0.000075,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "claude-haiku-3",
+        "input_price": 0.00000025,
+        "output_price": 0.00000125,
+        "max_context_tokens": 200000
+    }
+]

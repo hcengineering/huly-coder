@@ -51,7 +51,6 @@ pub use event::AgentOutputEvent;
 use tokio::sync::RwLock;
 
 use self::event::AgentState;
-use self::event::AgentStatus;
 use self::utils::*;
 
 pub struct Agent {
@@ -66,7 +65,8 @@ pub struct Agent {
     memory: Arc<RwLock<MemoryManager>>,
     memory_index: Option<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>,
     process_registry: Arc<RwLock<ProcessRegistry>>,
-    current_tokens: u32,
+    current_input_tokens: u32,
+    current_completion_tokens: u32,
     state: AgentState,
 }
 
@@ -93,6 +93,10 @@ impl Display for AgentError {
     }
 }
 
+fn count_tokens(system_prompt: &str) -> u32 {
+    system_prompt.len() as u32 / 4
+}
+
 impl Agent {
     pub fn new(
         config: Config,
@@ -108,7 +112,8 @@ impl Agent {
             messages,
             stream: None,
             assistant_content: None,
-            current_tokens: 0,
+            current_input_tokens: 0,
+            current_completion_tokens: 0,
             memory: Arc::new(RwLock::new(MemoryManager::new(false))),
             process_registry: Arc::new(RwLock::new(ProcessRegistry::default())),
             memory_index: None,
@@ -338,7 +343,7 @@ impl Agent {
         self.messages[last_idx] = message;
     }
 
-    async fn process_messages(&mut self) -> Result<(), AgentError> {
+    async fn process_messages(&mut self, system_prompt_token_count: u32) -> Result<(), AgentError> {
         if self.state.is_paused() {
             return Ok(());
         }
@@ -494,7 +499,49 @@ impl Agent {
                 if let Some(raw_response) = response.raw_response {
                     let usage = raw_response.usage;
                     tracing::info!("Usage: {:?}", usage);
-                    self.current_tokens = usage.total_tokens as u32;
+                    if usage.total_tokens > 0 {
+                        self.current_input_tokens = usage.prompt_tokens as u32;
+                        self.current_completion_tokens =
+                            (usage.total_tokens - usage.prompt_tokens) as u32;
+                    } else {
+                        // try to calculate aproximate tokens
+                        self.current_input_tokens = system_prompt_token_count
+                            + self
+                                .messages
+                                .iter()
+                                .map(|m| match m {
+                                    Message::User { content } => content
+                                        .iter()
+                                        .map(|c| match c {
+                                            UserContent::Text(text) => count_tokens(&text.text),
+                                            UserContent::ToolResult(tool_result) => tool_result
+                                                .content
+                                                .iter()
+                                                .map(|t| match t {
+                                                    ToolResultContent::Text(text) => {
+                                                        count_tokens(&text.text)
+                                                    }
+                                                    _ => 0,
+                                                })
+                                                .sum::<u32>(),
+                                            _ => 0,
+                                        })
+                                        .sum::<u32>(),
+                                    Message::Assistant { content } => content
+                                        .iter()
+                                        .map(|c| match c {
+                                            AssistantContent::Text(text) => {
+                                                count_tokens(&text.text)
+                                            }
+                                            AssistantContent::ToolCall(tool_call) => count_tokens(
+                                                &serde_json::to_string(tool_call).unwrap(),
+                                            ),
+                                        })
+                                        .sum::<u32>(),
+                                })
+                                .sum::<u32>();
+                        self.current_completion_tokens = 0;
+                    }
                 }
                 self.assistant_content = None;
                 if matches!(self.state, AgentState::Completed(false)) {
@@ -517,6 +564,7 @@ impl Agent {
         );
         let system_prompt =
             prepare_system_prompt(&self.config.workspace, &self.config.user_instructions).await;
+        let system_prompt_token_count = count_tokens(&system_prompt);
         self.agent = Some(
             Self::build_agent(BuildAgentContext {
                 config: &self.config,
@@ -577,7 +625,7 @@ impl Agent {
                     }
                 }
             }
-            if let Err(e) = self.process_messages().await {
+            if let Err(e) = self.process_messages(system_prompt_token_count).await {
                 tracing::debug!("persist_history");
                 persist_history(&self.messages);
                 tracing::error!("Error processing messages: {}", e);
@@ -615,11 +663,11 @@ impl Agent {
         self.state = state;
         if !self.sender.is_closed() {
             self.sender
-                .send(AgentOutputEvent::AgentStatus(AgentStatus {
-                    current_tokens: self.current_tokens,
-                    max_tokens: 1,
-                    state: self.state.clone(),
-                }))
+                .send(AgentOutputEvent::AgentStatus(
+                    self.current_input_tokens,
+                    self.current_completion_tokens,
+                    self.state.clone(),
+                ))
                 .unwrap();
         }
     }

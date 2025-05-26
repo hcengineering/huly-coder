@@ -1,0 +1,128 @@
+[
+    {
+        "model_id": "gpt-4.1",
+        "input_price": 0.000002,
+        "output_price": 0.000008,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4.1-mini",
+        "input_price": 0.0000004,
+        "output_price": 0.0000016,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4.1-nano",
+        "input_price": 0.0000001,
+        "output_price": 0.0000004,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4.5-preview",
+        "input_price": 0.000075,
+        "output_price": 0.00015,
+        "max_context_tokens": 256000
+    },
+    {
+        "model_id": "gpt-4o",
+        "input_price": 0.0000025,
+        "output_price": 0.00001,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4o-audio-preview",
+        "input_price": 0.0000025,
+        "output_price": 0.00001,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4o-realtime-preview",
+        "input_price": 0.000005,
+        "output_price": 0.00002,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4o-mini",
+        "input_price": 0.00000015,
+        "output_price": 0.0000006,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4o-mini-audio-preview",
+        "input_price": 0.00000015,
+        "output_price": 0.0000006,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4o-mini-realtime-preview",
+        "input_price": 0.0000006,
+        "output_price": 0.0000024,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "o1",
+        "input_price": 0.000015,
+        "output_price": 0.00006,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "o1-pro",
+        "input_price": 0.00015,
+        "output_price": 0.0006,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "o3",
+        "input_price": 0.00001,
+        "output_price": 0.00004,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "o4-mini",
+        "input_price": 0.0000011,
+        "output_price": 0.0000044,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "o3-mini",
+        "input_price": 0.0000011,
+        "output_price": 0.0000044,
+        "max_context_tokens": 200000
+    },
+    {
+        "model_id": "o1-mini",
+        "input_price": 0.0000011,
+        "output_price": 0.0000044,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "codex-mini-latest",
+        "input_price": 0.0000015,
+        "output_price": 0.000006,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4o-mini-search-preview",
+        "input_price": 0.00000015,
+        "output_price": 0.0000006,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-4o-search-preview",
+        "input_price": 0.0000025,
+        "output_price": 0.00001,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "computer-use-preview",
+        "input_price": 0.000003,
+        "output_price": 0.000012,
+        "max_context_tokens": 128000
+    },
+    {
+        "model_id": "gpt-image-1",
+        "input_price": 0.000005,
+        "output_price": 0.0,
+        "max_context_tokens": 128000
+    }
+]

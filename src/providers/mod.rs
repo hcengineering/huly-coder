@@ -1,4 +1,5 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
+
 use async_trait::async_trait;
 use rig::agent::Agent;
 use rig::completion::CompletionError;
@@ -6,6 +7,7 @@ use rig::message::Message;
 use rig::streaming::{StreamingCompletion, StreamingCompletionResponse};
 use rig::tool::ToolSet;
 
+pub mod model_info;
 pub mod openrouter;
 
 #[async_trait]

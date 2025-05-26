@@ -36,6 +36,13 @@ impl Client {
                             .parse()
                             .expect("Bearer token should parse"),
                     );
+                    headers.insert(
+                        "HTTP-Referer",
+                        "https://github.com/hcengineering/huly-coder"
+                            .parse()
+                            .unwrap(),
+                    );
+                    headers.insert("X-Title", "Huly Coder".parse().unwrap());
                     headers
                 })
                 .build()

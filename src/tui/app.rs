@@ -2,9 +2,10 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use crate::agent::event::{AgentCommandStatus, AgentState, AgentStatus};
+use crate::agent::event::{AgentCommandStatus, AgentState};
 use crate::config::Config;
 
+use crate::providers::model_info::ModelInfo;
 use crate::{
     agent::{self, AgentControlEvent, AgentOutputEvent},
     tui::{
@@ -50,6 +51,16 @@ impl From<u8> for FocusedComponent {
             _ => FocusedComponent::Input,
         }
     }
+}
+
+#[derive(Debug, Default)]
+pub struct AgentStatus {
+    pub current_input_tokens: u32,
+    pub current_completion_tokens: u32,
+    pub max_tokens: u32,
+    pub input_price: f64,
+    pub completion_price: f64,
+    pub state: AgentState,
 }
 
 #[derive(Debug, Default)]
@@ -107,9 +118,23 @@ impl UiState<'_> {
     }
 }
 
+impl ModelState {
+    pub fn new(messages: Vec<Message>, model_info: ModelInfo) -> Self {
+        let mut model_state = ModelState {
+            messages,
+            ..Default::default()
+        };
+        model_state.agent_status.input_price = model_info.input_price;
+        model_state.agent_status.completion_price = model_info.completion_price;
+        model_state.agent_status.max_tokens = model_info.max_tokens;
+        model_state
+    }
+}
+
 impl App<'_> {
     pub fn new(
         config: Config,
+        model_info: ModelInfo,
         sender: mpsc::UnboundedSender<agent::AgentControlEvent>,
         receiver: mpsc::UnboundedReceiver<agent::AgentOutputEvent>,
         messages: Vec<Message>,
@@ -121,10 +146,7 @@ impl App<'_> {
             events: UiEventMultiplexer::new(receiver),
             agent_sender: sender,
             theme: Theme::default(),
-            model: ModelState {
-                messages,
-                ..Default::default()
-            },
+            model: ModelState::new(messages, model_info),
         }
     }
 
@@ -258,15 +280,20 @@ impl App<'_> {
                                 }
                             }
                         }
-                        AgentOutputEvent::AgentStatus(status) => {
-                            tracing::info!("agent_status: {:?}", status);
+                        AgentOutputEvent::AgentStatus(
+                            current_input_tokens,
+                            current_completion_tokens,
+                            state,
+                        ) => {
+                            tracing::info!("agent_state: {}", state);
                             // if the task is no longer processing, focus input
-                            if !self.model.agent_status.state.is_paused()
-                                && status.state.is_paused()
-                            {
+                            if !self.model.agent_status.state.is_paused() && state.is_paused() {
                                 self.ui.focus = FocusedComponent::Input;
                             }
-                            self.model.agent_status = status;
+                            self.model.agent_status.state = state;
+                            self.model.agent_status.current_input_tokens = current_input_tokens;
+                            self.model.agent_status.current_completion_tokens =
+                                current_completion_tokens;
                             if let AgentState::Error(msg) = &self.model.agent_status.state {
                                 self.model.last_error = Some(msg.clone());
                             }

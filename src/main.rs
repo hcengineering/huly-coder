@@ -9,6 +9,7 @@ use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::LeaveAlternateScreen;
+use providers::model_info::model_info;
 use ratatui::prelude::CrosstermBackend;
 use ratatui::DefaultTerminal;
 use ratatui::Terminal;
@@ -107,6 +108,9 @@ async fn main() -> color_eyre::Result<()> {
         Vec::new()
     };
 
+    let model_info = model_info(&config).await?;
+    tracing::info!("Model info: {:?}", model_info);
+
     let mut agent = agent::Agent::new(
         config.clone(),
         control_receiver,
@@ -120,7 +124,7 @@ async fn main() -> color_eyre::Result<()> {
     });
 
     let terminal = init_tui().unwrap();
-    let result = tui::App::new(config, control_sender, output_receiver, history)
+    let result = tui::App::new(config, model_info, control_sender, output_receiver, history)
         .run(terminal)
         .await;
     let _ = agent_handler.await;
