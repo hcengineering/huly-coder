@@ -1,7 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["xtask"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+homepage = "https://github.com/hcengineering/huly-coder"
+repository = "https://github.com/hcengineering/huly-coder"
+
 [package]
 name = "huly-coder"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+homepage = "https://github.com/hcengineering/huly-coder"
+repository = "https://github.com/hcengineering/huly-coder"
+authors = ["Konstantin Zaitsev <kos@hardcoreeng.com>"]
 
 [dependencies]
 rig-core = { git = "https://github.com/kosz78/rig.git", branch = "mcp", features = [

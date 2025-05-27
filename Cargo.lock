@@ -5530,6 +5530,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask"
+version = "0.1.0"
+
+[[package]]
 name = "yaml-rust2"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

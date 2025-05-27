@@ -152,10 +152,7 @@ impl Tool for WebSearchTool {
                         response.text().await.unwrap()
                     )));
                 }
-                let body = response
-                    .text()
-                    .await
-                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+                let body = response.text().await?;
                 let json: BraveResult = serde_json::from_str(&body)?;
                 let converter = htmd::HtmlToMarkdownBuilder::new().build();
                 let result = json
