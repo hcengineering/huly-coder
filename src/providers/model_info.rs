@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::config::Config;
 
-const OPENROUTER_MODELS_FILE: &str = "openrouter_models.json";
+const OPENROUTER_MODELS_FILE: &str = "data/openrouter_models.json";
 const ANTHROPIC_MODELS: &str = include_str!("anthropic_models.json");
 const OPENAI_MODELS: &str = include_str!("openai_models.json");
 

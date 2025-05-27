@@ -46,20 +46,18 @@ cargo run
 To build the Huly Coder image, run:
 
 ```bash
-docker build -t huly-coder -f "./Dockerfile" .
+cargo xtask build-docker
 ```
 
 ### Running Huly Coder
 
 To run the Huly Coder image:
 
+Create a `huly-coder-local.yaml` file in your `data` directory with overrided configurations and run the following command:
+
 ```bash
-docker run -it --rm -v "$(pwd)/target/workspace:/target/workspace" -e OPENROUTER_API_KEY=<your-api-key> huly-coder
+cargo xtask run-docker <data_dir> <workspace_dir>
 ```
-
-Replace `<your-api-key>` with your OpenRouter API key.
-
-The agent uses `target/workspace` as its working directory.
 
 ## Available Tools
 

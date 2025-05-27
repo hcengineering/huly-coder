@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 const CONFIG_FILE: &str = "huly-coder.yaml";
 const LOCAL_CONFIG_FILE: &str = "huly-coder-local.yaml";
+const DOCKER_LOCAL_CONFIG_FILE: &str = "data/huly-coder-local.yaml";
 
 #[derive(Debug, Deserialize, Clone)]
 pub enum ProviderKind {
@@ -88,6 +89,12 @@ impl Config {
         if Path::new(LOCAL_CONFIG_FILE).exists() {
             tracing::info!("Found local config at {}", LOCAL_CONFIG_FILE);
             builder = builder.add_source(config::File::with_name(LOCAL_CONFIG_FILE));
+        }
+
+        // Docker related local config file that stored in /data directory
+        if Path::new(DOCKER_LOCAL_CONFIG_FILE).exists() {
+            tracing::info!("Found local config at {}", DOCKER_LOCAL_CONFIG_FILE);
+            builder = builder.add_source(config::File::with_name(DOCKER_LOCAL_CONFIG_FILE));
         }
 
         let user_config = format!(

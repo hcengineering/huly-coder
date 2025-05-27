@@ -29,6 +29,8 @@ pub mod templates;
 pub mod tools;
 mod tui;
 
+const HISTORY_PATH: &str = "data/history.json";
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -38,7 +40,7 @@ struct Args {
 }
 
 fn init_logger() {
-    let writer = tracing_appender::rolling::daily("logs", "huly-coder.log");
+    let writer = tracing_appender::rolling::daily("data/logs", "huly-coder.log");
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::layer()
@@ -102,8 +104,8 @@ async fn main() -> color_eyre::Result<()> {
         tokio::sync::mpsc::unbounded_channel::<AgentOutputEvent>();
     let (control_sender, control_receiver) =
         tokio::sync::mpsc::unbounded_channel::<AgentControlEvent>();
-    let history = if !args.skip_load_messages && std::path::Path::new("history.json").exists() {
-        serde_json::from_str(&std::fs::read_to_string("history.json").unwrap()).unwrap()
+    let history = if !args.skip_load_messages && std::path::Path::new(HISTORY_PATH).exists() {
+        serde_json::from_str(&std::fs::read_to_string(HISTORY_PATH).unwrap()).unwrap()
     } else {
         Vec::new()
     };

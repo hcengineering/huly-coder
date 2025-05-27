@@ -13,6 +13,7 @@ use tokio::sync::RwLock;
 use crate::templates::{ENV_DETAILS, SYSTEM_PROMPT};
 use crate::tools::execute_command::ProcessRegistry;
 use crate::tools::memory::Entity;
+use crate::HISTORY_PATH;
 
 pub const MAX_FILES: usize = 10000;
 
@@ -142,7 +143,7 @@ pub fn is_last_user_message(messages: &[Message]) -> bool {
 
 pub fn persist_history(messages: &[Message]) {
     fs::write(
-        "history.json",
+        HISTORY_PATH,
         serde_json::to_string_pretty(messages).unwrap(),
     )
     .unwrap();

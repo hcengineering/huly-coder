@@ -19,7 +19,7 @@ use super::AgentToolError;
 mod tests;
 
 const TOOLS_STR: &str = include_str!("tools.json");
-const MEMORY_PATH: &str = "memory.yaml";
+const MEMORY_PATH: &str = "data/memory.yaml";
 
 #[derive(Clone, Deserialize)]
 struct JsonToolDefinition {
