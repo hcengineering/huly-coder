@@ -411,10 +411,12 @@ impl App<'_> {
             {
                 self.agent_sender.send(AgentControlEvent::NewTask).unwrap()
             }
-            KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => self
-                .agent_sender
-                .send(AgentControlEvent::CancelTask)
-                .unwrap(),
+            KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.model.last_error = None;
+                self.agent_sender
+                    .send(AgentControlEvent::CancelTask)
+                    .unwrap()
+            }
             KeyCode::BackTab => {
                 let mut focus = self.ui.focus.clone() as u8;
                 if focus == 0 {

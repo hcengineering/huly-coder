@@ -19,22 +19,24 @@ pub(crate) fn split_think_tags(text: &str) -> Vec<(String, bool)> {
         if ch == '<' {
             is_tag_content = true;
             if !tag_name.is_empty()
-                && tag_name != "think"
-                && tag_name != "thinking"
-                && tag_name != "/think"
-                && tag_name != "/thinking"
+                && tag_name != "<think>"
+                && tag_name != "<thinking>"
+                && tag_name != "</think>"
+                && tag_name != "</thinking>"
             {
-                current_string.push_str(&format!("<{}", tag_name));
+                current_string.push_str(&tag_name);
             }
             tag_name.clear();
+            tag_name.push(ch);
         } else if ch == '>' && is_tag_content {
             is_tag_content = false;
+            tag_name.push(ch);
             // start think tag
-            if (tag_name == "think" || tag_name == "thinking") && !current_string.is_empty() {
+            if (tag_name == "<think>" || tag_name == "<thinking>") && !current_string.is_empty() {
                 result.push((current_string.clone(), false));
                 current_string.clear();
             }
-            if tag_name == "/think" || tag_name == "/thinking" && !current_string.is_empty() {
+            if tag_name == "</think>" || tag_name == "</thinking>" && !current_string.is_empty() {
                 result.push((current_string.clone(), true));
                 current_string.clear();
             }
@@ -44,19 +46,19 @@ pub(crate) fn split_think_tags(text: &str) -> Vec<(String, bool)> {
             current_string.push(ch);
         }
     }
-    if tag_name != "think"
-        && tag_name != "thinking"
-        && tag_name != "/think"
-        && tag_name != "/thinking"
+    if tag_name != "<think>"
+        && tag_name != "<thinking>"
+        && tag_name != "</think>"
+        && tag_name != "</thinking>"
     {
-        current_string.push_str(&format!("<{}", tag_name));
+        current_string.push_str(&tag_name);
         tag_name.clear();
     }
 
     if !current_string.is_empty() {
         result.push((
             current_string.clone(),
-            tag_name == "think" || tag_name == "thinking",
+            tag_name == "<think>" || tag_name == "<thinking>",
         ));
     }
     result
@@ -82,5 +84,12 @@ mod tests {
                 ("baz".to_string(), true)
             ]
         );
+    }
+
+    #[test]
+    fn test_split_think_no_tags() {
+        let text = "test message.";
+        let pairs = split_think_tags(text);
+        assert_eq!(pairs, vec![("test message.".to_string(), false),]);
     }
 }

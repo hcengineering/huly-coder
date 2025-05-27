@@ -176,9 +176,11 @@ impl<'a> MessageWidget<'a> {
                                             .enumerate()
                                             .map(|(i, s)| {
                                                 if i == 0 {
-                                                    s.clone().content(s.content.trim().to_string())
+                                                    s.clone()
+                                                        .style(self.theme.text_style())
+                                                        .content(s.content.trim().to_string())
                                                 } else {
-                                                    s
+                                                    s.style(self.theme.text_style())
                                                 }
                                             })
                                             .collect::<Vec<_>>();
