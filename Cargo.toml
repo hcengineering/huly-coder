@@ -16,6 +16,7 @@ license = "MIT"
 homepage = "https://github.com/hcengineering/huly-coder"
 repository = "https://github.com/hcengineering/huly-coder"
 authors = ["Konstantin Zaitsev <kos@hardcoreeng.com>"]
+description = "A lightweight autonomous AI coding agent with terminal-based UI, inspired by Codex and Cline."
 
 [dependencies]
 rig-core = { git = "https://github.com/kosz78/rig.git", branch = "mcp", features = [

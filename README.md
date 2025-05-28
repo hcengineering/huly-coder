@@ -1,6 +1,8 @@
 # Huly Coder
 
-Huly Coder is an AI coding agent that helps you develop software through natural language interaction. It provides a powerful terminal-based interface with a suite of tools for file manipulation, code generation, and project management.
+A lightweight autonomous AI coding agent with terminal-based UI, inspired by Codex and Cline.
+
+![examples/simple.gif](examples/simple.gif)
 
 ## Features
 
@@ -10,12 +12,6 @@ Huly Coder is an AI coding agent that helps you develop software through natural
 - **Memory System**: Persistent knowledge graph for maintaining context across sessions
 - **Multiple LLM Providers**: Support for OpenRouter, LMStudio, and OpenAI
 - **Docker Support**: Easy containerization for portable development environments
-
-## Requirements
-
-- Rust 1.75 or higher
-- OpenRouter API key (or alternative LLM provider credentials)
-- Terminal with Unicode support
 
 ## Configuration
 
@@ -58,32 +54,6 @@ Create a `huly-coder-local.yaml` file in your `data` directory with overrided co
 ```bash
 cargo xtask run-docker <data_dir> <workspace_dir>
 ```
-
-## Available Tools
-
-Huly Coder comes with a comprehensive set of tools:
-
-- **File Operations**
-  - Read and write files with automatic directory creation
-  - Smart file content replacement with context awareness
-  - Recursive file listing and searching with regex support
-  - File content search with contextual results
-
-- **System Tools**
-  - Execute system commands with safety checks
-  - Interactive command execution support
-  - Background process management
-
-- **Web Tools**
-  - Web search capabilities
-  - URL content fetching with markdown conversion
-  - API integration support
-
-- **Memory System**
-  - Knowledge graph for persistent memory
-  - Entity and relationship management
-  - Context-aware observation storage
-  - Search and retrieval capabilities
 
 ## Contributing
 
