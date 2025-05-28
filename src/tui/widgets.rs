@@ -160,7 +160,6 @@ impl Widget for &mut App<'_> {
             .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::History)));
 
         let chat_len = self.model.messages.len();
-        self.ui.history_scroll_state = self.ui.history_scroll_state.content_length(chat_len);
 
         let builder = ListBuilder::new(|context| {
             let item = MessageWidget::new(

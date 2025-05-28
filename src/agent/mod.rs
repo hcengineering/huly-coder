@@ -655,6 +655,9 @@ impl Agent {
                         self.sender.send(AgentOutputEvent::NewTask).ok();
                         persist_history(&self.messages);
                     }
+                    AgentControlEvent::TerminalData(idx, data) => {
+                        self.process_registry.read().await.send_data(idx, data);
+                    }
                 }
             }
             if let Err(e) = self.process_messages(system_prompt_token_count).await {

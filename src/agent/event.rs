@@ -67,6 +67,8 @@ pub enum AgentOutputEvent {
 #[derive(Clone, Debug)]
 pub enum AgentControlEvent {
     SendMessage(String),
+    /// Sends data to stdin of running terminal by idx
+    TerminalData(usize, Vec<u8>),
     CancelTask,
     NewTask,
 }

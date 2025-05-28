@@ -106,11 +106,7 @@ pub async fn add_env_message<'a>(
                     "| {}    | {}                 | `{}` |",
                     id,
                     if let Some(exit_status) = status {
-                        if let Some(code) = exit_status.code() {
-                            format!("Exited({})", code)
-                        } else {
-                            "Exited(-1)".to_string()
-                        }
+                        format!("Exited({})", exit_status)
                     } else {
                         "Running".to_string()
                     },

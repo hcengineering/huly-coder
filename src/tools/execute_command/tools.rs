@@ -133,9 +133,7 @@ impl Tool for ExecuteCommandTool {
                 if let Some(exit_status) = exit_status {
                     return Ok(format!(
                         "Command ID: {}\nExit Status: Exited({})\nOutput:\n{}",
-                        command_id,
-                        exit_status.code().unwrap_or_default(),
-                        output
+                        command_id, exit_status, output
                     ));
                 }
                 command_output = output.to_string();
@@ -194,9 +192,7 @@ impl Tool for GetCommandResultTool {
             if let Some(exit_status) = exit_status {
                 Ok(format!(
                     "Command ID: {}\nExit Status: Exited({})\nOutput:\n{}",
-                    args.command_id,
-                    exit_status.code().unwrap_or_default(),
-                    output
+                    args.command_id, exit_status, output
                 ))
             } else {
                 Ok(format!(

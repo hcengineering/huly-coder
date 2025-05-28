@@ -1,6 +1,7 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::vec;
 
 use crate::agent::event::{AgentCommandStatus, AgentState};
 use crate::config::Config;
@@ -83,7 +84,6 @@ pub struct UiState<'a> {
     pub textarea: TextArea<'a>,
     pub focus: FocusedComponent,
     pub tree_state: FileTreeState,
-    pub history_scroll_state: ScrollbarState,
     pub history_state: ListState,
     pub history_opened_state: HashSet<usize>,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
@@ -107,7 +107,6 @@ impl UiState<'_> {
         Self {
             textarea: TextArea::default(),
             focus: FocusedComponent::Input,
-            history_scroll_state: ScrollbarState::default(),
             tree_state: FileTreeState::new(workspace),
             history_state: ListState::default(),
             history_opened_state: HashSet::default(),
@@ -194,6 +193,48 @@ impl App<'_> {
                                         &mut self.ui.terminal_state,
                                         &event,
                                     );
+                                    if key_event.kind == KeyEventKind::Press {
+                                        let input_data = match key_event.code {
+                                            KeyCode::Char(ch) => {
+                                                if ch == 'c'
+                                                    && key_event.modifiers == KeyModifiers::CONTROL
+                                                {
+                                                    vec![3]
+                                                } else {
+                                                    vec![ch as u8]
+                                                }
+                                            }
+                                            KeyCode::Enter => {
+                                                vec![b'\n']
+                                            }
+                                            KeyCode::Down
+                                                if key_event.modifiers == KeyModifiers::ALT =>
+                                            {
+                                                vec![b'\x1b', b'[', b'B']
+                                            }
+                                            KeyCode::Up
+                                                if key_event.modifiers == KeyModifiers::ALT =>
+                                            {
+                                                vec![b'\x1b', b'[', b'A']
+                                            }
+                                            _ => {
+                                                vec![]
+                                            }
+                                        };
+                                        if !input_data.is_empty() {
+                                            tracing::trace!(
+                                                "Sending data to terminal: {} {:?}",
+                                                self.ui.terminal_state.selected_idx,
+                                                input_data
+                                            );
+                                            self.agent_sender
+                                                .send(AgentControlEvent::TerminalData(
+                                                    self.ui.terminal_state.selected_idx + 1,
+                                                    input_data,
+                                                ))
+                                                .unwrap()
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -383,11 +424,11 @@ impl App<'_> {
                         terminal_state.selected_idx = idx - 1;
                         terminal_state.scroll_position = 0;
                     }
-                    KeyCode::Down => {
+                    KeyCode::Down if key_event.modifiers != KeyModifiers::ALT => {
                         terminal_state.scroll_position =
                             terminal_state.scroll_position.saturating_add(1);
                     }
-                    KeyCode::Up => {
+                    KeyCode::Up if key_event.modifiers != KeyModifiers::ALT => {
                         terminal_state.scroll_position =
                             terminal_state.scroll_position.saturating_sub(1);
                     }
