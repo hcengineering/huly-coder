@@ -3615,7 +3615,7 @@ checksum = "57397d16646700483b67d2dd6511d79318f9d057fdbd21a4066aeac8b41d310a"
 [[package]]
 name = "rig-core"
 version = "0.12.0"
-source = "git+https://github.com/kosz78/rig.git?branch=mcp#5b9a512d62126fe0d73b6da44d8e47ad1c605b88"
+source = "git+https://github.com/kosz78/rig.git?branch=mcp#dc3ef66da2ec62f487f1f973dd7debff556e77a9"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
@@ -3636,7 +3636,7 @@ dependencies = [
 [[package]]
 name = "rig-fastembed"
 version = "0.1.6"
-source = "git+https://github.com/kosz78/rig.git?branch=mcp#5b9a512d62126fe0d73b6da44d8e47ad1c605b88"
+source = "git+https://github.com/kosz78/rig.git?branch=mcp#dc3ef66da2ec62f487f1f973dd7debff556e77a9"
 dependencies = [
  "fastembed",
  "rig-core",
