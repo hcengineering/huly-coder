@@ -1,0 +1,5 @@
+[[package]] # the double square brackets define a TOML table array
+name = "huly-coder"
+changelog_update = true
+git_release_enable = true
+publish = false
