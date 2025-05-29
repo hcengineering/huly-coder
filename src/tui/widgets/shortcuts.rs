@@ -33,7 +33,7 @@ impl ShortcutsWidget {
             Span::styled(": Navigate | ", theme.inactive_style()),
             Span::styled("Enter", theme.highlight_style()),
             Span::styled(": Select | ", theme.inactive_style()),
-            Span::styled("^q", theme.highlight_style()),
+            Span::styled("^w", theme.highlight_style()),
             Span::styled(": Quit ", theme.inactive_style()),
         ])]);
 
