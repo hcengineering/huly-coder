@@ -427,7 +427,7 @@ impl Agent {
                         self.add_message(Message::Assistant {
                             content: OneOrMany::one(AssistantContent::ToolCall(tool_call.clone())),
                         });
-                        let (tool_result, is_error) = match self
+                        let (mut tool_result, is_error) = match self
                             .agent
                             .as_mut()
                             .unwrap()
@@ -456,60 +456,55 @@ impl Agent {
                         };
 
                         tracing::trace!("tool_result: '{}'", tool_result);
-                        if (tool_result.is_empty() || tool_result == "\"\"")
-                            && tool_call.function.name != AttemptCompletionTool::NAME
-                        {
-                            tracing::info!(
-                                "Stop processing because empty result from tool: {}",
+                        if tool_result.is_empty() || tool_result == "\"\"" {
+                            tool_result = format!(
+                                "The [{}] tool executed successfully but returned no results.",
                                 tool_call.function.name
                             );
-                            self.set_state(AgentState::WaitingUserPrompt);
-                        } else {
-                            if !is_error {
-                                match tool_call.function.name.as_str() {
-                                    ReadFileTool::NAME
-                                    | WriteToFileTool::NAME
-                                    | ListFilesTool::NAME
-                                    | ReplaceInFileTool::NAME => {
-                                        if let Some(path) = tool_call
-                                            .function
-                                            .arguments
-                                            .as_object()
-                                            .unwrap()
-                                            .get("path")
-                                        {
-                                            self.sender
-                                                .send(AgentOutputEvent::HighlightFile(
-                                                    path.as_str().unwrap().to_string(),
-                                                    tool_call.function.name
-                                                        == WriteToFileTool::NAME,
-                                                ))
-                                                .unwrap();
-                                        }
+                        }
+                        if !is_error {
+                            match tool_call.function.name.as_str() {
+                                ReadFileTool::NAME
+                                | WriteToFileTool::NAME
+                                | ListFilesTool::NAME
+                                | ReplaceInFileTool::NAME => {
+                                    if let Some(path) = tool_call
+                                        .function
+                                        .arguments
+                                        .as_object()
+                                        .unwrap()
+                                        .get("path")
+                                    {
+                                        self.sender
+                                            .send(AgentOutputEvent::HighlightFile(
+                                                path.as_str().unwrap().to_string(),
+                                                tool_call.function.name == WriteToFileTool::NAME,
+                                            ))
+                                            .unwrap();
                                     }
-                                    _ => {}
                                 }
+                                _ => {}
                             }
-                            let mut result_message = Message::User {
-                                content: OneOrMany::one(UserContent::tool_result(
-                                    tool_call.id.clone(),
-                                    OneOrMany::one(ToolResultContent::text(tool_result)),
-                                )),
-                            };
-                            if tool_call.function.name == AttemptCompletionTool::NAME {
-                                self.set_state(AgentState::Completed(false));
-                                tracing::info!("Stop task with success");
-                                persist_history(&self.messages);
-                            } else {
-                                add_env_message(
-                                    &mut result_message,
-                                    self.memory_index.as_ref(),
-                                    &self.config.workspace,
-                                    self.process_registry.clone(),
-                                )
-                                .await;
-                                self.add_message(result_message);
-                            }
+                        }
+                        let mut result_message = Message::User {
+                            content: OneOrMany::one(UserContent::tool_result(
+                                tool_call.id.clone(),
+                                OneOrMany::one(ToolResultContent::text(tool_result)),
+                            )),
+                        };
+                        if tool_call.function.name == AttemptCompletionTool::NAME {
+                            self.set_state(AgentState::Completed(false));
+                            tracing::info!("Stop task with success");
+                            persist_history(&self.messages);
+                        } else {
+                            add_env_message(
+                                &mut result_message,
+                                self.memory_index.as_ref(),
+                                &self.config.workspace,
+                                self.process_registry.clone(),
+                            )
+                            .await;
+                            self.add_message(result_message);
                         }
                     }
                     Err(e) => {
