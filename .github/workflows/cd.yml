@@ -23,7 +23,7 @@ defaults:
 jobs:
   upload-assets:
     name: ${{ matrix.target }}
-    if: startsWith(github.event.release.name, 'huly-coder-v')
+    if: startsWith(github.event.release.name, 'huly-coder')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
