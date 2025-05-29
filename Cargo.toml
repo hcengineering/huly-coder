@@ -23,7 +23,9 @@ publish = false
 rig-core = { git = "https://github.com/kosz78/rig.git", branch = "mcp", features = [
     "mcp",
 ] }
-mcp-core = { version = "0.1.50", features = ["sse"] }
+mcp-core = { git = "https://github.com/kosz78/mcp-core.git", branch = "main", features = [
+    "sse",
+] }
 # memory related
 rig-fastembed = { git = "https://github.com/kosz78/rig.git", branch = "mcp" }
 # fix version for rig-fastembed compatibility

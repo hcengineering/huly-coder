@@ -2577,8 +2577,7 @@ dependencies = [
 [[package]]
 name = "mcp-core"
 version = "0.1.50"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a76673446eba2d1011f0dbc3b8668984f8b1ca2754b05b9c2bcd27d02ad73aa3"
+source = "git+https://github.com/kosz78/mcp-core.git?branch=main#05a7b8f0af8140c40d876f5c6d5e3cb0cbbdab80"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -3615,7 +3614,7 @@ checksum = "57397d16646700483b67d2dd6511d79318f9d057fdbd21a4066aeac8b41d310a"
 [[package]]
 name = "rig-core"
 version = "0.12.0"
-source = "git+https://github.com/kosz78/rig.git?branch=mcp#dc3ef66da2ec62f487f1f973dd7debff556e77a9"
+source = "git+https://github.com/kosz78/rig.git?branch=mcp#1ac1d161fd3d74f0e24315eaa14a649b4715bda3"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
@@ -3636,7 +3635,7 @@ dependencies = [
 [[package]]
 name = "rig-fastembed"
 version = "0.1.6"
-source = "git+https://github.com/kosz78/rig.git?branch=mcp#dc3ef66da2ec62f487f1f973dd7debff556e77a9"
+source = "git+https://github.com/kosz78/rig.git?branch=mcp#1ac1d161fd3d74f0e24315eaa14a649b4715bda3"
 dependencies = [
  "fastembed",
  "rig-core",
