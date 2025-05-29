@@ -23,6 +23,7 @@ use crate::tools::web_fetch::WebFetchTool;
 use crate::tools::web_search::WebSearchTool;
 use crate::tools::write_to_file::WriteToFileTool;
 use crate::Config;
+use anyhow::Context;
 use anyhow::Result;
 use futures::StreamExt;
 use itertools::Itertools;
@@ -222,14 +223,13 @@ impl Agent {
                                 .unwrap_or(ProtocolVersion::V2025_03_26),
                         )
                         .build();
-                    match mcp_client.open().await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            tracing::error!("Failed to open MCP client: {}", e);
-                            continue;
-                        }
-                    }
-                    mcp_client.initialize().await?;
+                    mcp_client
+                        .open()
+                        .await
+                        .with_context(|| format!("Failed to open MCP client at {}", config.url))?;
+                    mcp_client.initialize().await.with_context(|| {
+                        format!("Failed initialize MCP client at {}", config.url)
+                    })?;
                     let tools_list_res = mcp_client.list_tools(None, None).await?;
 
                     agent_builder = tools_list_res
