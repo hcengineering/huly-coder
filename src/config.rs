@@ -40,8 +40,15 @@ pub enum McpClientTransport {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct McpClientConfig {
+    pub transport: McpClientTransport,
+    pub context_tool: Option<String>,
+    /// System prompt to use for the agent with placeholder {CONTEXT_TOOL} will be replaced with the context tool result
+    pub system_prompt: Option<String>,
+}
+#[derive(Debug, Deserialize, Clone)]
 pub struct McpConfig {
-    pub servers: HashMap<String, McpClientTransport>,
+    pub servers: HashMap<String, McpClientConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

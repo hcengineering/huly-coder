@@ -34,6 +34,7 @@ use event::ConfirmToolResponse;
 use futures::StreamExt;
 use itertools::Itertools;
 use mcp_core::types::ProtocolVersion;
+use mcp_core::types::ToolResponseContent;
 use rig::agent::AgentBuilder;
 use rig::completion::CompletionError;
 use rig::completion::CompletionModel;
@@ -201,19 +202,20 @@ impl Agent {
         agent_builder
     }
 
-    async fn add_mcp_tools<M>(
+    async fn add_mcp_tools<'a, M>(
         mut agent_builder: AgentBuilder<M>,
         mcp: Option<&McpConfig>,
-    ) -> Result<AgentBuilder<M>>
+    ) -> Result<(AgentBuilder<M>, String)>
     where
         M: CompletionModel,
     {
         let Some(mcp_config) = mcp else {
-            return Ok(agent_builder);
+            return Ok((agent_builder, String::default()));
         };
 
+        let mut system_prompt_addons = Vec::default();
         for server_config in mcp_config.servers.values() {
-            match server_config {
+            match &server_config.transport {
                 McpClientTransport::Stdio(config) => {
                     let transport = mcp_core::transport::ClientStdioTransport::new(
                         &config.command,
@@ -261,16 +263,43 @@ impl Agent {
                     })?;
                     let tools_list_res = mcp_client.list_tools(None, None).await?;
 
+                    if let Some(system_prompt_template) = &server_config.system_prompt {
+                        if let Some(context_tool) = &server_config.context_tool {
+                            let result = mcp_client.call_tool(&context_tool, None).await?;
+                            if result.is_error.is_none_or(|is_error| !is_error) {
+                                let txt = result
+                                    .content
+                                    .iter()
+                                    .filter_map(|content| {
+                                        if let ToolResponseContent::Text(txt) = content {
+                                            Some(txt.text.clone())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .join("\\n");
+                                let system_prompt =
+                                    system_prompt_template.replace("{CONTEXT_TOOL}", &txt);
+                                system_prompt_addons.push(system_prompt);
+                            }
+                        }
+                    }
                     agent_builder = tools_list_res
                         .tools
                         .into_iter()
+                        .filter(|tool| {
+                            server_config
+                                .context_tool
+                                .as_ref()
+                                .is_none_or(|ctx_tool| ctx_tool != &tool.name)
+                        })
                         .fold(agent_builder, |builder, tool| {
                             builder.mcp_tool(tool, mcp_client.clone())
                         })
                 }
             }
         }
-        Ok(agent_builder)
+        Ok((agent_builder, system_prompt_addons.join("\\n")))
     }
 
     async fn configure_agent<M>(
@@ -281,13 +310,14 @@ impl Agent {
     where
         M: CompletionModel,
     {
-        agent_builder = agent_builder
-            .preamble(&context.system_prompt)
-            .temperature(0.0);
+        agent_builder = agent_builder.temperature(0.0);
+        let mut system_prompt = context.system_prompt.clone();
         let mcp_config = context.config.mcp.as_ref();
         agent_builder = Self::add_static_tools(agent_builder, context);
-        agent_builder = Self::add_mcp_tools(agent_builder, mcp_config).await?;
-        let agent = agent_builder.build();
+        let (agent_builder, system_prompt_addons) =
+            Self::add_mcp_tools(agent_builder, mcp_config).await?;
+        system_prompt.push_str(&system_prompt_addons);
+        let agent = agent_builder.preamble(&system_prompt).build();
         *tools_tokens = count_tokens(
             &agent
                 .tools
