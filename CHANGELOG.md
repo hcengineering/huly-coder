@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.1.0...huly-coder-v0.1.1) (2025-05-30)
+
+
+### Bug Fixes
+
+* change quit shortcut to Ctrl+w ([df8de85](https://github.com/hcengineering/huly-coder/commit/df8de850c32f5e5d0a2047e567636ac5c326be0f))
+* Correct handle not result from tools ([6bc3bff](https://github.com/hcengineering/huly-coder/commit/6bc3bfff39bfa2b738ab42e9016c01bbb137e379))
+* improve error handling for MCP client initialization and opening with context messages ([d977735](https://github.com/hcengineering/huly-coder/commit/d977735044ea324e2a106bcdc604022272ff221c))
+
 ## 0.1.0 (2025-05-29)
 
 
