@@ -332,9 +332,11 @@ impl App<'_> {
                                 self.ui.focus = FocusedComponent::Input;
                             }
                             self.model.agent_status.state = state;
-                            self.model.agent_status.current_input_tokens = current_input_tokens;
-                            self.model.agent_status.current_completion_tokens =
-                                current_completion_tokens;
+                            if current_input_tokens > 0 {
+                                self.model.agent_status.current_input_tokens = current_input_tokens;
+                                self.model.agent_status.current_completion_tokens =
+                                    current_completion_tokens;
+                            }
                             if let AgentState::Error(msg) = &self.model.agent_status.state {
                                 self.model.last_error = Some(msg.clone());
                             }

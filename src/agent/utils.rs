@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 
 use crate::templates::{ENV_DETAILS, SYSTEM_PROMPT};
 use crate::tools::execute_command::ProcessRegistry;
-use crate::tools::memory::Entity;
+use crate::tools::memory::{self, Entity};
 use crate::HISTORY_PATH;
 
 pub const MAX_FILES: usize = 10000;
@@ -48,7 +48,9 @@ pub async fn prepare_system_prompt(workspace_dir: &Path, user_instructions: &str
 
 pub async fn add_env_message<'a>(
     msg: &'a mut Message,
-    memory_index: Option<&'a InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>,
+    memory_index: Arc<
+        tokio::sync::RwLock<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, memory::Entity>>,
+    >,
     workspace: &'a Path,
     process_registry: Arc<RwLock<ProcessRegistry>>,
 ) {
@@ -82,21 +84,21 @@ pub async fn add_env_message<'a>(
     if let Message::User { content } = msg {
         let text = content.first();
         let mut memory_entries = String::new();
-        if let Some(memory_index) = memory_index {
-            let txt = match text {
-                UserContent::Text(text) => &text.text.to_string(),
-                UserContent::ToolResult(tool_result) => match tool_result.content.first() {
-                    rig::message::ToolResultContent::Text(text) => &text.text.to_string(),
-                    rig::message::ToolResultContent::Image(_) => "",
-                },
-                _ => "",
-            };
-            if !txt.is_empty() {
-                let res: Vec<(f64, String, Entity)> = memory_index.top_n(txt, 10).await.unwrap();
-                let result: Vec<_> = res.into_iter().map(|(_, _, entity)| entity).collect();
-                memory_entries = serde_yaml::to_string(&result).unwrap();
-            }
+        let memory_index = memory_index.read().await;
+        let txt = match text {
+            UserContent::Text(text) => &text.text.to_string(),
+            UserContent::ToolResult(tool_result) => match tool_result.content.first() {
+                rig::message::ToolResultContent::Text(text) => &text.text.to_string(),
+                rig::message::ToolResultContent::Image(_) => "",
+            },
+            _ => "",
+        };
+        if !txt.is_empty() {
+            let res: Vec<(f64, String, Entity)> = memory_index.top_n(txt, 10).await.unwrap();
+            let result: Vec<_> = res.into_iter().map(|(_, _, entity)| entity).collect();
+            memory_entries = serde_yaml::to_string(&result).unwrap();
         }
+
         let commands = process_registry
             .read()
             .await
@@ -128,13 +130,6 @@ pub async fn add_env_message<'a>(
             .unwrap(),
         ));
     }
-}
-
-pub fn is_last_user_message(messages: &[Message]) -> bool {
-    if messages.is_empty() {
-        return false;
-    }
-    matches!(messages.last().unwrap(), Message::User { .. })
 }
 
 pub fn persist_history(messages: &[Message]) {

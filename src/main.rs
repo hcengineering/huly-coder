@@ -113,16 +113,12 @@ async fn main() -> color_eyre::Result<()> {
     let model_info = model_info(&config).await?;
     tracing::info!("Model info: {:?}", model_info);
 
-    let mut agent = agent::Agent::new(
-        config.clone(),
-        control_receiver,
-        output_sender,
-        history.clone(),
-    );
-    agent.init_memory_index().await;
+    let mut agent = agent::Agent::new(config.clone(), output_sender);
+    let memory_index = agent.init_memory_index().await;
 
+    let messages = history.clone();
     let agent_handler = tokio::spawn(async move {
-        agent.run().await;
+        agent.run(control_receiver, messages, memory_index).await;
     });
 
     let terminal = init_tui().unwrap();
