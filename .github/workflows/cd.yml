@@ -4,8 +4,11 @@ permissions:
   contents: write
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - huly-coder-v*
+
+  workflow_dispatch: # allows you to run this workflow manually from the Actions tab
 
 env:
   CARGO_INCREMENTAL: 0
@@ -23,7 +26,6 @@ defaults:
 jobs:
   upload-assets:
     name: ${{ matrix.target }}
-    if: startsWith(github.event.release.name, 'huly-coder')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -42,6 +44,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
