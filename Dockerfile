@@ -1,5 +1,6 @@
 # Build stage
-FROM rust:1.86 AS builder
+FROM --platform=$BUILDPLATFORM rust:1.86 AS builder
+ARG TARGETPLATFORM
 WORKDIR /usr/src/huly-coder
 COPY . .
 RUN cargo build --release
