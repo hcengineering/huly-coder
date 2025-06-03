@@ -27,6 +27,18 @@ user_instructions: |               # Custom personality/role instructions
     Your goal is to build working software based on user request.
 ```
 
+## Official Docker Image
+
+To run Huly Coder in docker, create a `huly-coder-local.yaml` file in your `data` directory with overrided configurations and run the following command:
+
+```bash
+docker run -e DOCKER_RUN=1 \
+    -v "<workspace_dir>:/target/workspace" \
+    -v "<data_dir>:/data" \
+    -v "<data_dir>/.fastembed_cache:/.fastembed_cache" \
+    -it --rm hardcoreeng/huly-coder:latest
+```
+
 ## Local Run
 
 To run Huly Coder locally, run:
