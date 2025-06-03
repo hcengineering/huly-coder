@@ -8,6 +8,7 @@ mod terminal;
 mod toolbar;
 
 use crate::agent::event::AgentState;
+use crate::tui::widgets::message::create_messages;
 use crate::tui::App;
 use ratatui::prelude::StatefulWidget;
 use ratatui::style::Stylize;
@@ -166,17 +167,26 @@ impl Widget for &mut App<'_> {
             .border_type(BorderType::Rounded)
             .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::History)));
 
-        let chat_len = self.model.messages.len();
+        let mut messages: Vec<MessageWidget> = Vec::new();
+        let mut virt_idx = 0;
+        for (idx, message) in self.model.messages.iter().enumerate() {
+            for item in create_messages(
+                message,
+                &theme,
+                layout.chat_area.width - 2,
+                layout.chat_area.height as usize - 4,
+                idx == self.model.messages.len() - 1
+                    || self.ui.history_opened_state.contains(&virt_idx),
+            ) {
+                messages.push(item);
+                virt_idx += 1;
+            }
+        }
+        let chat_len = messages.len();
 
         let builder = ListBuilder::new(|context| {
-            let item = MessageWidget::new(
-                &self.model.messages[context.index],
-                &theme,
-                context.is_selected,
-                self.ui.history_opened_state.contains(&context.index)
-                    || context.index == self.model.messages.len() - 1,
-                layout.chat_area.width,
-            );
+            let mut item = messages[context.index].clone();
+            item.is_selected = context.is_selected;
             let main_axis_size = item.main_axis_size();
             (item, main_axis_size)
         });
