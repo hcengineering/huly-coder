@@ -202,7 +202,7 @@ impl Agent {
         agent_builder
     }
 
-    async fn add_mcp_tools<'a, M>(
+    async fn add_mcp_tools<M>(
         mut agent_builder: AgentBuilder<M>,
         mcp: Option<&McpConfig>,
     ) -> Result<(AgentBuilder<M>, String)>
@@ -265,7 +265,7 @@ impl Agent {
 
                     if let Some(system_prompt_template) = &server_config.system_prompt {
                         if let Some(context_tool) = &server_config.context_tool {
-                            let result = mcp_client.call_tool(&context_tool, None).await?;
+                            let result = mcp_client.call_tool(context_tool, None).await?;
                             if result.is_error.is_none_or(|is_error| !is_error) {
                                 let txt = result
                                     .content
