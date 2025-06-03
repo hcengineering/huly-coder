@@ -27,8 +27,9 @@ impl TaskStatusWidget {
             .style(Style::default().bg(theme.border));
         let max_len = area.width.saturating_sub(5) as usize;
         let (icon, message) = match state {
-            AgentState::ToolCall(tool, args) => {
-                let (icon, info) = tool_info::get_tool_call_info(tool, args);
+            AgentState::ToolCall(tool, _) => {
+                let (icon, info) =
+                    tool_info::get_tool_call_info(&tool.function.name, &tool.function.arguments);
                 (Span::raw(icon), Span::raw(info))
             }
             AgentState::Paused => (Span::from("⏸️"), Span::raw("Agent paused")),
@@ -57,7 +58,7 @@ impl TaskStatusWidget {
                     msg.to_string()
                 }),
             ),
-            AgentState::Completed(_) => (Span::from("✅"), Span::raw("Completed")),
+            AgentState::Completed => (Span::from("✅"), Span::raw("Completed")),
         };
 
         Paragraph::new(Line::default().spans(vec![icon, Span::raw(" "), message]))

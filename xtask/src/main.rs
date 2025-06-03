@@ -113,6 +113,8 @@ fn run_docker(data_dir: &str, workspace_dir: &str) -> Result<(), DynError> {
         .arg("run")
         .arg("-it")
         .arg("--rm")
+        .arg("-e")
+        .arg("DOCKER_RUN=1")
         .arg("-v")
         .arg(format!("{}:/target/workspace", workspace_dir))
         .arg("-v")

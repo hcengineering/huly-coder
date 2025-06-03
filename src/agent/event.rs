@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
-use rig::message::Message;
+use rig::message::{Message, ToolCall};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum AgentState {
@@ -11,21 +11,30 @@ pub enum AgentState {
     Thinking,
     WaitingUserPrompt,
     Error(String),
-    Completed(bool),
-    ToolCall(String, serde_json::Value),
+    Completed,
+    ToolCall(ToolCall, bool),
 }
 
 impl AgentState {
     pub fn is_paused(&self) -> bool {
         matches!(
             self,
-            Self::Paused | Self::Completed(true) | Self::Error(_) | Self::WaitingUserPrompt
+            Self::Paused
+                | Self::Completed
+                | Self::Error(_)
+                | Self::WaitingUserPrompt
+                | Self::ToolCall(_, true)
         )
     }
 
     #[inline]
     pub fn is_completed(&self) -> bool {
-        matches!(self, Self::Completed(is_finished) if *is_finished)
+        matches!(self, Self::Completed)
+    }
+
+    #[inline]
+    pub fn is_tool_call(&self) -> bool {
+        matches!(self, Self::ToolCall(_, false))
     }
 }
 
@@ -37,8 +46,14 @@ impl Display for AgentState {
             Self::Thinking => write!(f, "Thinking"),
             Self::WaitingUserPrompt => write!(f, "WaitingUserPrompt"),
             Self::Error(_) => write!(f, "Error"),
-            Self::Completed(is_finished) => write!(f, "Completed({})", is_finished),
-            Self::ToolCall(name, _) => write!(f, "ToolCall[{}]", name),
+            Self::Completed => write!(f, "Completed"),
+            Self::ToolCall(tool_call, need_confirm) => {
+                write!(
+                    f,
+                    "ToolCall[{}] need_confirm={}",
+                    tool_call.function.name, need_confirm
+                )
+            }
         }
     }
 }
@@ -63,12 +78,20 @@ pub enum AgentOutputEvent {
     HighlightFile(String, bool),
 }
 
+#[derive(Clone, Debug)]
+pub enum ConfirmToolResponse {
+    Approve,
+    Deny,
+    AlwaysApprove,
+}
+
 /// Controls events that are sent to the agent
 #[derive(Clone, Debug)]
 pub enum AgentControlEvent {
     SendMessage(String),
     /// Sends data to stdin of running terminal by idx
     TerminalData(usize, Vec<u8>),
+    ConfirmTool(ConfirmToolResponse),
     CancelTask,
     NewTask,
 }

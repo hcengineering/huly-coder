@@ -29,6 +29,15 @@ model: anthropic/claude-3.5-sonnet
 #provider_base_url: http://127.0.0.1:1234/v1
 
 #---------------------------------------
+# Permission mode
+#---------------------------------------
+# Supported permission modes:
+# - full_autonomous
+# - manual_approval (default)
+# - deny_all
+permission_mode: manual_approval
+
+#---------------------------------------
 # Workspace Configuration
 #---------------------------------------
 workspace: ./target/workspace

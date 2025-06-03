@@ -45,6 +45,11 @@ impl ToolbarWidget {
             ),
             Span::styled(" | ", Style::default().fg(theme.focus)),
             Span::styled(&config.model, Style::default().fg(theme.text)),
+            Span::styled(" | ", Style::default().fg(theme.focus)),
+            Span::styled(
+                format!("{:?}", config.permission_mode),
+                Style::default().fg(theme.text),
+            ),
             Span::styled(" ", Style::default().fg(theme.text)),
         ]);
 

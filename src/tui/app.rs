@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::vec;
 
-use crate::agent::event::{AgentCommandStatus, AgentState};
+use crate::agent::event::{AgentCommandStatus, AgentState, ConfirmToolResponse};
 use crate::config::Config;
 
 use crate::providers::model_info::ModelInfo;
@@ -23,6 +23,7 @@ use ratatui::{
     DefaultTerminal,
 };
 use rig::message::{Message, UserContent};
+use rig::tool::Tool;
 use tokio::sync::mpsc;
 use tui_textarea::TextArea;
 use tui_widget_list::ListState;
@@ -443,6 +444,32 @@ impl App<'_> {
     pub fn handle_global_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<bool> {
         if key_event.kind != KeyEventKind::Press {
             return Ok(false);
+        }
+
+        if let AgentState::ToolCall(tool_call, true) = &self.model.agent_status.state {
+            if tool_call.function.name
+                != crate::tools::ask_followup_question::AskFollowupQuestionTool::NAME
+            {
+                match key_event.code {
+                    KeyCode::Enter => self
+                        .agent_sender
+                        .send(AgentControlEvent::ConfirmTool(ConfirmToolResponse::Approve))
+                        .unwrap(),
+                    KeyCode::Esc => self
+                        .agent_sender
+                        .send(AgentControlEvent::ConfirmTool(ConfirmToolResponse::Deny))
+                        .unwrap(),
+                    KeyCode::Char('a') | KeyCode::Char('A') => self
+                        .agent_sender
+                        .send(AgentControlEvent::ConfirmTool(
+                            ConfirmToolResponse::AlwaysApprove,
+                        ))
+                        .unwrap(),
+
+                    _ => {}
+                }
+                return Ok(true);
+            }
         }
 
         match key_event.code {

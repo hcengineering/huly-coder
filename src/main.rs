@@ -30,6 +30,7 @@ pub mod tools;
 mod tui;
 
 const HISTORY_PATH: &str = "data/history.json";
+const CONFIG_STATE_FILE_PATH: &str = "data/config_state.yaml";
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

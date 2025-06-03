@@ -7,8 +7,12 @@ mod task_status;
 mod terminal;
 mod toolbar;
 
+use crate::agent::event::AgentState;
 use crate::tui::App;
 use ratatui::prelude::StatefulWidget;
+use ratatui::style::Stylize;
+use ratatui::symbols;
+use ratatui::text::Text;
 use ratatui::widgets::Widget;
 use ratatui::{
     buffer::Buffer,
@@ -17,6 +21,8 @@ use ratatui::{
     text::Line,
     widgets::{Block, BorderType, Borders, Padding, Paragraph, Scrollbar, ScrollbarOrientation},
 };
+
+use rig::tool::Tool;
 use shortcuts::ShortcutsWidget;
 use task_info::TaskInfoWidget;
 use toolbar::ToolbarWidget;
@@ -28,6 +34,7 @@ use self::task_status::TaskStatusWidget;
 use self::terminal::TerminalWidget;
 
 use super::app::FocusedComponent;
+use super::tool_info;
 
 struct LayoutRects {
     toolbar_area: Rect,
@@ -256,6 +263,32 @@ impl Widget for &mut App<'_> {
 
         // Status bar with shortcuts
         ShortcutsWidget.render(layout.shortcuts_area, buf, &theme);
+
+        // render popup dialog if need tool confirmation
+        if let AgentState::ToolCall(tool_call, true) = &self.model.agent_status.state {
+            if tool_call.function.name
+                != crate::tools::ask_followup_question::AskFollowupQuestionTool::NAME
+            {
+                let tool_name = tool_call.function.name.clone();
+                let tool_args = tool_call.function.arguments.clone();
+                let (icon, info) = tool_info::get_tool_call_info(&tool_name, &tool_args);
+                let mut text = Text::default();
+                text.push_line("");
+                text.push_line("  Agent want execute tool:  ");
+                text.push_line("");
+                text.push_line(Line::default().spans(vec!["  ", &icon, &info, "   "]));
+                text.push_line("");
+                text.push_line(Line::styled(
+                    "  Enter - Approve | Esc - Deny | a - Always Approve  ",
+                    Style::default(),
+                ));
+                let popup = tui_popup::Popup::new(text)
+                    .title(format!(" Confirm tool execution: {}", tool_name))
+                    .style(Style::new().white().on_blue())
+                    .border_set(symbols::border::ROUNDED);
+                popup.render(area, buf);
+            }
+        }
 
         //#region: focus areas
         self.ui

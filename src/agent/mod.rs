@@ -1,9 +1,13 @@
+use std::collections::HashSet;
 use std::fmt::Display;
+use std::fs;
+use std::path::Path;
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::sync::Arc;
 
 use crate::config::McpClientTransport;
 use crate::config::McpConfig;
+use crate::config::PermissionMode;
 use crate::config::ProviderKind;
 use crate::providers::HulyAgent;
 use crate::tools::ask_followup_question::AskFollowupQuestionTool;
@@ -23,8 +27,10 @@ use crate::tools::web_fetch::WebFetchTool;
 use crate::tools::web_search::WebSearchTool;
 use crate::tools::write_to_file::WriteToFileTool;
 use crate::Config;
+use crate::CONFIG_STATE_FILE_PATH;
 use anyhow::Context;
 use anyhow::Result;
+use event::ConfirmToolResponse;
 use futures::StreamExt;
 use itertools::Itertools;
 use mcp_core::types::ProtocolVersion;
@@ -35,6 +41,7 @@ use rig::completion::CompletionResponse;
 use rig::embeddings::EmbeddingsBuilder;
 use rig::message::AssistantContent;
 use rig::message::Message;
+use rig::message::ToolCall;
 use rig::message::ToolResultContent;
 use rig::message::UserContent;
 use rig::tool::Tool;
@@ -43,6 +50,8 @@ use rig::tool::ToolSetError;
 use rig::vector_store::in_memory_store::InMemoryVectorIndex;
 use rig::vector_store::in_memory_store::InMemoryVectorStore;
 use rig::OneOrMany;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::mpsc;
 
 pub mod event;
@@ -68,6 +77,26 @@ struct BuildAgentContext<'a> {
     process_registry: Arc<RwLock<ProcessRegistry>>,
     system_prompt: String,
     sender: mpsc::UnboundedSender<AgentOutputEvent>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct AgentConfigState {
+    approved_tools: HashSet<String>,
+}
+
+impl AgentConfigState {
+    pub fn new() -> Self {
+        if Path::new(CONFIG_STATE_FILE_PATH).exists() {
+            serde_yaml::from_str(
+                &std::fs::read_to_string(CONFIG_STATE_FILE_PATH).unwrap_or_default(),
+            )
+            .unwrap_or_default()
+        } else {
+            Self {
+                approved_tools: HashSet::default(),
+            }
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -101,6 +130,7 @@ fn pending_tool_id<'a>(messages: RwLockReadGuard<'a, Vec<Message>>) -> Option<St
 
 struct AgentContext {
     config: Config,
+    config_state: Arc<RwLock<AgentConfigState>>,
     messages: Arc<RwLock<Vec<Message>>>,
     state: Arc<RwLock<AgentState>>,
     sender: mpsc::UnboundedSender<AgentOutputEvent>,
@@ -375,7 +405,7 @@ impl Agent {
                     AssistantContent::Text(_) => AgentState::WaitingUserPrompt,
                     AssistantContent::ToolCall(tool_call) => {
                         if tool_call.function.name == AttemptCompletionTool::NAME {
-                            AgentState::Completed(true)
+                            AgentState::Completed
                         } else {
                             AgentState::WaitingUserPrompt
                         }
@@ -392,9 +422,11 @@ impl Agent {
         let memory_index = Arc::new(RwLock::new(memory_index));
         let sender = self.sender.clone();
         let state = Arc::new(RwLock::new(state));
+        let config_state = Arc::new(RwLock::new(AgentConfigState::new()));
 
         let events_context = AgentContext {
             config: self.config.clone(),
+            config_state: config_state.clone(),
             messages: messages.clone(),
             state: state.clone(),
             sender: self.sender.clone(),
@@ -407,6 +439,7 @@ impl Agent {
 
         let process_context = AgentContext {
             config: self.config.clone(),
+            config_state: config_state.clone(),
             messages: messages.clone(),
             state: state.clone(),
             sender: self.sender.clone(),
@@ -459,7 +492,8 @@ impl AgentContext {
             Message::user(message)
         };
         self.add_message(self.add_env_message(message).await).await;
-        self.set_state(AgentState::WaitingResponse).await;
+        self.set_state(AgentState::WaitingResponse, "send_message")
+            .await;
     }
 
     async fn add_env_message(&self, mut message: Message) -> Message {
@@ -473,9 +507,14 @@ impl AgentContext {
         message
     }
 
-    async fn set_state(&mut self, state: AgentState) {
+    async fn set_state(&mut self, state: AgentState, reason: &str) {
         let mut cur_state = self.state.write().await;
-        tracing::info!("Agent state trasition: {}->{}", cur_state, state);
+        tracing::info!(
+            "Agent state trasition({}): {}->{}",
+            reason,
+            cur_state,
+            state
+        );
         *cur_state = state.clone();
         if !self.sender.is_closed() {
             self.sender
@@ -505,6 +544,16 @@ impl AgentContext {
         tracing::debug!("persist_history");
         let messages = self.messages.read().await;
         persist_history(&messages);
+    }
+
+    async fn persist_config_state(&self) {
+        tracing::debug!("persist_config_state");
+        let state = self.config_state.read().await;
+        fs::write(
+            CONFIG_STATE_FILE_PATH,
+            serde_yaml::to_string(&*state).unwrap(),
+        )
+        .unwrap();
     }
 
     async fn update_last_message(&mut self, message: Message) {
@@ -564,23 +613,67 @@ async fn handle_control_events(
             AgentControlEvent::CancelTask => {
                 tracing::info!("Cancel current task");
                 if !ctx.state.read().await.is_paused() {
-                    ctx.set_state(AgentState::Paused).await;
+                    ctx.set_state(AgentState::Paused, "cancel_task").await;
                 } else if !ctx.state.read().await.is_completed()
                     && !ctx.messages.read().await.is_empty()
                 {
-                    ctx.set_state(AgentState::WaitingResponse).await;
+                    ctx.set_state(AgentState::WaitingResponse, "resume_task")
+                        .await;
                 }
             }
             AgentControlEvent::NewTask => {
                 tracing::info!("New task");
                 ctx.messages.write().await.clear();
-                ctx.set_state(AgentState::WaitingUserPrompt).await;
+                ctx.set_state(AgentState::WaitingUserPrompt, "new_task")
+                    .await;
                 ctx.sender.send(AgentOutputEvent::NewTask).ok();
                 ctx.persist_history().await;
             }
             AgentControlEvent::TerminalData(idx, data) => {
                 tracing::info!("Terminal input data");
                 ctx.process_registry.read().await.send_data(idx, data);
+            }
+            AgentControlEvent::ConfirmTool(response) => {
+                tracing::info!("Confirm tool: {:?}", response);
+                let state = ctx.state.read().await.clone();
+                let AgentState::ToolCall(tool_call, _) = state else {
+                    unreachable!()
+                };
+                match response {
+                    ConfirmToolResponse::Approve => {
+                        ctx.set_state(
+                            AgentState::ToolCall(tool_call.clone(), false),
+                            "tool_approve",
+                        )
+                        .await;
+                    }
+                    ConfirmToolResponse::Deny => {
+                        ctx.add_message(Message::tool_result(
+                            tool_call.id,
+                            "Tool execution denied",
+                        ))
+                        .await;
+                        ctx.set_state(AgentState::WaitingResponse, "tool_deny")
+                            .await;
+                    }
+                    ConfirmToolResponse::AlwaysApprove => {
+                        let state = ctx.state.read().await.clone();
+                        let AgentState::ToolCall(tool_call, _) = state else {
+                            unreachable!()
+                        };
+                        ctx.config_state
+                            .write()
+                            .await
+                            .approved_tools
+                            .insert(tool_call.function.name.clone());
+                        ctx.persist_config_state().await;
+                        ctx.set_state(
+                            AgentState::ToolCall(tool_call.clone(), false),
+                            "tool_always_approve",
+                        )
+                        .await;
+                    }
+                }
             }
         }
     }
@@ -593,16 +686,106 @@ async fn process_messages(mut ctx: AgentContext, mut agent: Box<dyn HulyAgent>) 
             continue;
         }
 
-        if !ctx.is_last_user_message().await {
-            ctx.set_state(AgentState::WaitingUserPrompt).await;
+        let state = ctx.state.read().await;
+        if state.is_tool_call() {
+            drop(state);
+            let state = ctx.state.read().await.clone();
+            let AgentState::ToolCall(tool_call, _) = state else {
+                unreachable!()
+            };
+            tracing::info!(
+                "Invoke previuos confirmed tool: {}",
+                tool_call.function.name
+            );
+            invoke_tool(&mut ctx, &mut agent, tool_call).await;
+        } else if !ctx.is_last_user_message().await {
+            drop(state);
+            ctx.set_state(AgentState::WaitingUserPrompt, "process_messages")
+                .await;
             continue;
+        } else {
+            drop(state);
         }
 
         if let Err(e) = send_messages(&mut ctx, &mut agent).await {
             ctx.persist_history().await;
             tracing::error!("Error processing messages: {}", e);
-            ctx.set_state(AgentState::Error(format!("{e}"))).await;
+            ctx.set_state(AgentState::Error(format!("{e}")), "process_messages")
+                .await;
         }
+    }
+
+    async fn invoke_tool(
+        ctx: &mut AgentContext,
+        agent: &mut Box<dyn HulyAgent>,
+        tool_call: ToolCall,
+    ) {
+        let (mut tool_result, is_error) = match agent
+            .tools()
+            .call(
+                &tool_call.function.name,
+                tool_call.function.arguments.to_string(),
+            )
+            .await
+        {
+            Ok(tool_json_result) => (tool_json_result, false),
+            Err(e) => {
+                tracing::error!("Error calling tool: {}", e);
+                match e {
+                    ToolSetError::ToolCallError(tce) => {
+                        match tce {
+                            ToolError::ToolCallError(ce) => {
+                                (format!("The tool execution failed with the following error: <error>{}</error>", ce), true)
+                            }
+                            _ => (format!("The tool execution failed with the following error: <error>{}</error>", tce), true),
+                        }
+                    }
+                    _ => (format!("The tool execution failed with the following error: <error>{}</error>", e), true),
+                }
+            }
+        };
+
+        tracing::trace!("tool_result: '{}'", tool_result);
+        if tool_result.is_empty() || tool_result == "\"\"" {
+            tool_result = format!(
+                "The [{}] tool executed successfully but returned no results.",
+                tool_call.function.name
+            );
+        }
+        if !is_error {
+            match tool_call.function.name.as_str() {
+                ReadFileTool::NAME
+                | WriteToFileTool::NAME
+                | ListFilesTool::NAME
+                | ReplaceInFileTool::NAME => {
+                    if let Some(path) = tool_call
+                        .function
+                        .arguments
+                        .as_object()
+                        .unwrap()
+                        .get("path")
+                    {
+                        ctx.sender
+                            .send(AgentOutputEvent::HighlightFile(
+                                path.as_str().unwrap().to_string(),
+                                tool_call.function.name == WriteToFileTool::NAME,
+                            ))
+                            .unwrap();
+                    }
+                }
+                _ => {}
+            }
+        }
+        let result_message = Message::User {
+            content: OneOrMany::one(UserContent::tool_result(
+                tool_call.id.clone(),
+                OneOrMany::one(ToolResultContent::text(tool_result)),
+            )),
+        };
+        ctx.add_message(ctx.add_env_message(result_message).await)
+            .await;
+        ctx.set_state(AgentState::WaitingResponse, "tool_call")
+            .await;
     }
 
     async fn send_messages(
@@ -614,7 +797,8 @@ async fn process_messages(mut ctx: AgentContext, mut agent: Box<dyn HulyAgent>) 
             .send_messages(last_message.clone(), ctx.chat_histoty().await)
             .await?;
         tracing::trace!("Sending messages to model: {:?}", last_message);
-        ctx.set_state(AgentState::WaitingResponse).await;
+        ctx.set_state(AgentState::WaitingResponse, "send_messages")
+            .await;
 
         let mut assistant_content = String::new();
 
@@ -628,7 +812,8 @@ async fn process_messages(mut ctx: AgentContext, mut agent: Box<dyn HulyAgent>) 
             match result {
                 AssistantContent::Text(text) => {
                     if matches!(*ctx.state.read().await, AgentState::Thinking) {
-                        ctx.set_state(AgentState::Thinking).await;
+                        ctx.set_state(AgentState::Thinking, "receive_response")
+                            .await;
                     }
                     let is_empty = assistant_content.is_empty();
                     assistant_content.push_str(&text.text);
@@ -640,85 +825,66 @@ async fn process_messages(mut ctx: AgentContext, mut agent: Box<dyn HulyAgent>) 
                     }
                 }
                 AssistantContent::ToolCall(tool_call) => {
-                    ctx.set_state(AgentState::ToolCall(
-                        tool_call.function.name.clone(),
-                        tool_call.function.arguments.clone(),
-                    ))
-                    .await;
                     assistant_content = String::new();
                     ctx.add_message(Message::Assistant {
                         content: OneOrMany::one(AssistantContent::ToolCall(tool_call.clone())),
                     })
                     .await;
-                    let (mut tool_result, is_error) = match agent
-                        .tools()
-                        .call(
-                            &tool_call.function.name,
-                            tool_call.function.arguments.to_string(),
-                        )
-                        .await
-                    {
-                        Ok(tool_json_result) => (tool_json_result, false),
-                        Err(e) => {
-                            tracing::error!("Error calling tool: {}", e);
-                            match e {
-                                    ToolSetError::ToolCallError(tce) => {
-                                        match tce {
-                                            ToolError::ToolCallError(ce) => {
-                                                (format!("The tool execution failed with the following error: <error>{}</error>", ce), true)
-                                            }
-                                            _ => (format!("The tool execution failed with the following error: <error>{}</error>", tce), true),
-                                        }
-                                    }
-                                    _ => (format!("The tool execution failed with the following error: <error>{}</error>", e), true),
-                                }
-                        }
-                    };
 
-                    tracing::trace!("tool_result: '{}'", tool_result);
-                    if tool_result.is_empty() || tool_result == "\"\"" {
-                        tool_result = format!(
-                            "The [{}] tool executed successfully but returned no results.",
-                            tool_call.function.name
-                        );
-                    }
-                    if !is_error {
-                        match tool_call.function.name.as_str() {
-                            ReadFileTool::NAME
-                            | WriteToFileTool::NAME
-                            | ListFilesTool::NAME
-                            | ReplaceInFileTool::NAME => {
-                                if let Some(path) = tool_call
-                                    .function
-                                    .arguments
-                                    .as_object()
-                                    .unwrap()
-                                    .get("path")
-                                {
-                                    ctx.sender
-                                        .send(AgentOutputEvent::HighlightFile(
-                                            path.as_str().unwrap().to_string(),
-                                            tool_call.function.name == WriteToFileTool::NAME,
-                                        ))
-                                        .unwrap();
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    let result_message = Message::User {
-                        content: OneOrMany::one(UserContent::tool_result(
-                            tool_call.id.clone(),
-                            OneOrMany::one(ToolResultContent::text(tool_result)),
-                        )),
-                    };
                     if tool_call.function.name == AttemptCompletionTool::NAME {
-                        ctx.set_state(AgentState::Completed(false)).await;
+                        ctx.set_state(AgentState::Completed, "attempt_completion")
+                            .await;
                         tracing::info!("Stop task with success");
                         ctx.persist_history().await;
+                    } else if tool_call.function.name == AskFollowupQuestionTool::NAME {
+                        ctx.set_state(
+                            AgentState::ToolCall(tool_call.clone(), true),
+                            "ask_followup_question",
+                        )
+                        .await;
+                        tracing::info!("Ask followup question");
+                        ctx.persist_history().await;
                     } else {
-                        ctx.add_message(ctx.add_env_message(result_message).await)
-                            .await;
+                        match ctx.config.permission_mode {
+                            PermissionMode::ManualApproval => {
+                                if ctx
+                                    .config_state
+                                    .read()
+                                    .await
+                                    .approved_tools
+                                    .contains(&tool_call.function.name)
+                                {
+                                    ctx.set_state(
+                                        AgentState::ToolCall(tool_call.clone(), false),
+                                        "manual_auto_approve",
+                                    )
+                                    .await;
+                                    invoke_tool(ctx, agent, tool_call).await;
+                                } else {
+                                    ctx.set_state(
+                                        AgentState::ToolCall(tool_call.clone(), true),
+                                        "manual_approve",
+                                    )
+                                    .await;
+                                }
+                            }
+                            PermissionMode::DenyAll => {
+                                ctx.add_message(Message::tool_result(
+                                    tool_call.id,
+                                    "Tool execution denied",
+                                ))
+                                .await;
+                                ctx.set_state(AgentState::Paused, "permission_deny").await;
+                            }
+                            PermissionMode::FullAutonomous => {
+                                ctx.set_state(
+                                    AgentState::ToolCall(tool_call.clone(), false),
+                                    "full_autonomous",
+                                )
+                                .await;
+                                invoke_tool(ctx, agent, tool_call).await;
+                            }
+                        }
                     }
                 }
             }
@@ -739,11 +905,9 @@ async fn process_messages(mut ctx: AgentContext, mut agent: Box<dyn HulyAgent>) 
                 ctx.current_completion_tokens = 0;
             }
         }
-        if matches!(*ctx.state.read().await, AgentState::Completed(false)) {
-            ctx.set_state(AgentState::Completed(true)).await;
-        } else if !ctx.is_last_user_message().await && !ctx.state.read().await.is_completed() {
-            ctx.set_state(AgentState::WaitingUserPrompt).await;
-        }
+        // if !ctx.is_last_user_message().await && !ctx.state.read().await.is_completed() {
+        //     ctx.set_state(AgentState::WaitingUserPrompt).await;
+        // }
         ctx.persist_history().await;
         Ok(())
     }

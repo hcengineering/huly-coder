@@ -1,5 +1,6 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::collections::HashMap;
+use std::env;
 use std::path::{Path, PathBuf};
 
 use mcp_core::types::ProtocolVersion;
@@ -68,11 +69,20 @@ pub enum WebFetchProvider {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionMode {
+    FullAutonomous,
+    ManualApproval,
+    DenyAll,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub provider: ProviderKind,
     pub provider_api_key: Option<String>,
     pub provider_base_url: Option<String>,
     pub model: String,
+    pub permission_mode: PermissionMode,
     pub workspace: PathBuf,
     pub user_instructions: String,
     pub mcp: Option<McpConfig>,
@@ -105,6 +115,9 @@ impl Config {
         if Path::new(&user_config).exists() {
             tracing::info!("Found user config at {}", user_config);
             builder = builder.add_source(config::File::with_name(&user_config));
+        }
+        if env::var("DOCKER_RUN").is_ok() {
+            builder = builder.set_override("permission_mode", "full_autonomous")?;
         }
         builder
             .build()?
