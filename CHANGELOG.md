@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.1.1...huly-coder-v0.2.0) (2025-06-03)
+
+
+### Features
+
+* Permission mode for tool execution ([0c990b6](https://github.com/hcengineering/huly-coder/commit/0c990b6206f4a962c5b6801fa5992ec1bfb20518))
+
 ## [0.1.1](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.1.0...huly-coder-v0.1.1) (2025-05-30)
 
 
