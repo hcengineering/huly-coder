@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.2.0...huly-coder-v0.2.1) (2025-06-03)
+
+
+### Bug Fixes
+
+* Split long messages for correct scrolling ([61b886f](https://github.com/hcengineering/huly-coder/commit/61b886f39d2cdf9851ad76fe08a3adcc31065163))
+
 ## [0.2.0](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.1.1...huly-coder-v0.2.0) (2025-06-03)
 
 
