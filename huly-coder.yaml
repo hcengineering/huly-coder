@@ -65,20 +65,23 @@ web_search:
 #---------------------------------------
 # MCP (Model Context Protocol) Configuration
 #---------------------------------------
-#mcp:
-#  servers:
+# mcp:
+#   servers:
 #    # Fetch server configuration
 #    fetch:
-#      type: stdio
-#      command: docker
-#      args: [ "run", "-i", "--rm", "mcp/fetch", "--ignore-robots-txt" ]
-#      protocol_version: 2024-11-05
+#      transport:
+#        type: stdio
+#        command: docker
+#        args: [ "run", "-i", "--rm", "mcp/fetch", "--ignore-robots-txt" ]
+#        protocol_version: 2024-11-05
+#      system_prompt: Custom system prompt addon for MCP server
 #    
 #    # Weather server configuration
 #    weather:
-#      type: sse
-#      url: http://127.0.0.1:8080/sse
-#      protocol_version: 2024-11-05
+#      transport:
+#        type: sse
+#        url: http://127.0.0.1:8080/sse
+#        protocol_version: 2024-11-05
 
 #---------------------------------------
 # AI Assistant Personality Configuration

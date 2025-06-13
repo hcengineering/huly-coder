@@ -185,10 +185,13 @@ impl Widget for &mut App<'_> {
         let chat_len = messages.len();
 
         let builder = ListBuilder::new(|context| {
-            let mut item = messages[context.index].clone();
-            item.is_selected = context.is_selected;
-            let main_axis_size = item.main_axis_size();
-            (item, main_axis_size)
+            if let Some(mut item) = messages.get(context.index).cloned() {
+                item.is_selected = context.is_selected;
+                let main_axis_size = item.main_axis_size();
+                (item, main_axis_size)
+            } else {
+                (MessageWidget::new(&theme, vec![], false), 0)
+            }
         });
         let list = ListView::new(builder, chat_len)
             .block(chat_block)
