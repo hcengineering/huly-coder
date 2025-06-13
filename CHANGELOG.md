@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.2.1...huly-coder-v0.2.2) (2025-06-13)
+
+
+### Bug Fixes
+
+* Fix possible crash in messages view, Update MCP declaration example in config, adjust theme colors ([0ce34fd](https://github.com/hcengineering/huly-coder/commit/0ce34fd1eb94349b946c48987a4bd318c2829616))
+
 ## [0.2.1](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.2.0...huly-coder-v0.2.1) (2025-06-03)
 
 
