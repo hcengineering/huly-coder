@@ -1,0 +1,44 @@
+{
+    "name": "huly-coder",
+    "version": "${version}",
+    "bin": "lib/index.js",
+    "description": "A lightweight autonomous AI coding agent with terminal-based UI, inspired by Codex and Cline.",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/hcengineering/huly-coder.git"
+    },
+    "keywords": [
+        "ai-agents",
+        "rag",
+        "agentic-ai",
+        "rust"
+    ],
+    "author": "Konstantin Zaitsev <kos@hardcoreeng.com>",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/hcengineering/huly-coder/issues"
+    },
+    "homepage": "https://github.com/hcengineering/huly-coder?tab=readme-ov-file",
+    "scripts": {
+        "typecheck": "tsc --noEmit",
+        "build": "tsc",
+        "dev": "yarn build && node lib/index.js"
+    },
+    "devDependencies": {
+        "@types/node": "^18.11.18",
+        "@typescript-eslint/eslint-plugin": "^5.48.0",
+        "@typescript-eslint/parser": "^5.48.0",
+        "eslint": "^8.31.0",
+        "typescript": "^4.9.4"
+    },
+    "optionalDependencies": {
+        "huly-coder-darwin-arm64": "${version}",
+        "huly-coder-darwin-x64": "${version}",
+        "huly-coder-linux-x64": "${version}",
+        "huly-coder-windows-x64": "${version}"
+    },
+    "packageManager": "yarn@4.1.0",
+    "publishConfig": {
+        "access": "public"
+    }
+}
