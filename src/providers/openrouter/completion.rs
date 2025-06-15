@@ -7,6 +7,7 @@ use super::client::{ApiErrorResponse, ApiResponse, Client, Usage};
 
 use rig::{
     completion::{self, CompletionError, CompletionRequest},
+    message::{ImageMediaType, MimeType},
     providers::openai::Message,
     OneOrMany,
 };
@@ -117,6 +118,71 @@ pub struct CompletionModel {
     pub model: String,
 }
 
+fn user_text_to_json(content: rig::message::UserContent) -> serde_json::Value {
+    match content {
+        rig::message::UserContent::Text(text) => json!({
+            "role": "user",
+            "content": text.text,
+        }),
+        _ => unreachable!(),
+    }
+}
+
+fn user_content_to_json(
+    content: rig::message::UserContent,
+) -> Result<serde_json::Value, CompletionError> {
+    match content {
+        rig::message::UserContent::Text(text) => Ok(json!({
+            "type": "text",
+            "text": text.text
+        })),
+        rig::message::UserContent::Image(image) => Ok(json!({
+            "type": "image_url",
+            "image_url": {
+                "url": format!("data:{};base64,{}", image.media_type.unwrap_or(ImageMediaType::PNG).to_mime_type(), image.data),
+            }
+        })),
+        rig::message::UserContent::Audio(_) => Err(CompletionError::RequestError(
+            "Audio is not supported".into(),
+        )),
+        rig::message::UserContent::Document(_) => Err(CompletionError::RequestError(
+            "Document is not supported".into(),
+        )),
+        rig::message::UserContent::ToolResult(_) => unreachable!(),
+    }
+}
+
+fn tool_content_to_json(
+    content: Vec<rig::message::UserContent>,
+) -> Result<serde_json::Value, CompletionError> {
+    let mut str_content = String::new();
+    let mut tool_id = String::new();
+
+    for content in content.into_iter() {
+        match content {
+            rig::message::UserContent::ToolResult(tool_result) => {
+                tool_id = tool_result.id;
+                str_content = tool_result
+                    .content
+                    .iter()
+                    .map(|c| match c {
+                        rig::message::ToolResultContent::Text(text) => text.text.clone(),
+                        // ignore image content
+                        _ => "".to_string(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+            }
+            _ => unreachable!(),
+        }
+    }
+    Ok(json!({
+        "role": "tool",
+        "content": str_content,
+        "tool_call_id": tool_id,
+    }))
+}
+
 impl CompletionModel {
     pub fn new(client: Client, model: &str) -> Self {
         Self {
@@ -130,64 +196,103 @@ impl CompletionModel {
         completion_request: CompletionRequest,
     ) -> Result<Value, CompletionError> {
         // Add preamble to chat history (if available)
-        let mut full_history: Vec<Message> = match &completion_request.preamble {
-            Some(preamble) => vec![Message::system(preamble)],
+        let mut full_history: Vec<serde_json::Value> = match &completion_request.preamble {
+            Some(preamble) => vec![json!({
+                "role": "system",
+                "content": preamble,
+            })],
             None => vec![],
         };
 
         // Convert existing chat history
-        let chat_history: Vec<Message> = completion_request
-            .chat_history
-            .into_iter()
-            .map(|message| message.try_into())
-            .collect::<Result<Vec<Vec<Message>>, _>>()?
-            .into_iter()
-            .flatten()
-            .collect();
-
-        // Combine all messages into a single history
-        full_history.extend(chat_history);
-        let messages: Vec<Value> = full_history
-            .into_iter()
-            .map(|ref m| match m {
-                Message::Assistant {
-                    content,
-                    refusal: _,
-                    audio: _,
-                    name: _,
-                    tool_calls,
-                } => {
-                    if !tool_calls.is_empty() {
-                        json!({
-                            "role": "assistant",
-                            "content": null,
-                            "tool_calls": tool_calls,
-                        })
+        for message in completion_request.chat_history.into_iter() {
+            match message {
+                rig::message::Message::User { content } => {
+                    if content.len() == 1
+                        && matches!(content.first(), rig::message::UserContent::Text(_))
+                    {
+                        full_history.push(user_text_to_json(content.first()));
+                    } else if content
+                        .iter()
+                        .any(|c| matches!(c, rig::message::UserContent::ToolResult(_)))
+                    {
+                        let (tool_content, user_content) =
+                            content.into_iter().partition::<Vec<_>, _>(|c| {
+                                matches!(c, rig::message::UserContent::ToolResult(_))
+                            });
+                        full_history.push(tool_content_to_json(tool_content.clone())?);
+                        for tool_content in tool_content.into_iter() {
+                            match tool_content {
+                                rig::message::UserContent::ToolResult(result) => {
+                                    for tool_result_content in result.content.into_iter() {
+                                        match tool_result_content {
+                                            rig::message::ToolResultContent::Image(image) => {
+                                                full_history.push(json!({
+                                                    "role": "user",
+                                                    "content": [{
+                                                        "type": "image_url",
+                                                        "image_url": {
+                                                            "url": format!("data:{};base64,{}", image.media_type.unwrap_or(ImageMediaType::PNG).to_mime_type(), image.data),
+                                                        }
+                                                    }]
+                                                }));
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        if !user_content.is_empty() {
+                            if user_content.len() == 1 {
+                                full_history
+                                    .push(user_text_to_json(user_content.first().unwrap().clone()));
+                            } else {
+                                let user_content = user_content
+                                    .into_iter()
+                                    .map(user_content_to_json)
+                                    .collect::<Result<Vec<_>, _>>()?;
+                                full_history
+                                    .push(json!({ "role": "user", "content": user_content}));
+                            }
+                        }
                     } else {
-                        json!({
-                            "role": "assistant",
-                            "content": match content.first().unwrap() {
-                                AssistantContent::Text { text } => text,
-                                _ => "",
-                            },
-                        })
+                        let content = content
+                            .into_iter()
+                            .map(user_content_to_json)
+                            .collect::<Result<Vec<_>, _>>()?;
+                        full_history.push(json!({ "role": "user", "content": content}));
                     }
                 }
-                Message::ToolResult {
-                    tool_call_id,
-                    content,
-                } => {
-                    let content = json!(content.first());
-                    let text = content.as_object().unwrap().get("text").unwrap();
-                    json!({
-                        "role": "tool",
-                        "content": text,
-                        "tool_call_id": tool_call_id,
-                    })
+                rig::message::Message::Assistant { content } => {
+                    for content in content {
+                        match content {
+                            rig::message::AssistantContent::Text(text) => {
+                                full_history.push(json!({
+                                    "role": "assistant",
+                                    "content": text.text
+                                }));
+                            }
+                            rig::message::AssistantContent::ToolCall(tool_call) => {
+                                full_history.push(json!({
+                                    "role": "assistant",
+                                    "content": null,
+                                    "tool_calls": [{
+                                        "id": tool_call.id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": tool_call.function.name,
+                                            "arguments": tool_call.function.arguments.to_string()
+                                        }
+                                    }]
+                                }));
+                            }
+                        }
+                    }
                 }
-                _ => json!(m),
-            })
-            .collect();
+            };
+        }
 
         let tools = completion_request
             .tools
@@ -201,7 +306,7 @@ impl CompletionModel {
             .collect::<Vec<_>>();
         let request = json!({
             "model": self.model,
-            "messages": messages,
+            "messages": full_history,
             "tools": tools,
             "temperature": completion_request.temperature,
         });

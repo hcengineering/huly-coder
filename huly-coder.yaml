@@ -82,6 +82,14 @@ web_search:
 #        type: sse
 #        url: http://127.0.0.1:8080/sse
 #        protocol_version: 2024-11-05
+#
+#    # Web Browser automation (note works only with OpenRouter provider)
+#     puppeteer:
+#       transport:
+#         type: stdio
+#         command: "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe"
+#         args: ["run", "-i", "--rm", "--init", "-e", "DOCKER_CONTAINER=true", "mcp/puppeteer"]
+#         protocol_version: 2024-11-05
 
 #---------------------------------------
 # AI Assistant Personality Configuration

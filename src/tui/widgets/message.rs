@@ -93,51 +93,78 @@ fn process_message<'a>(
     let mut is_complete = false;
     match message {
         Message::User { content } => {
-            if let UserContent::Text(txt) = content.first() {
-                let line = role_prefix("User", theme.user);
-                format_text_wrapped(&mut lines, &txt.text, line, width.into());
-            }
-            if let UserContent::ToolResult(tool_result) = content.first() {
-                let mut line = role_prefix("User", theme.user);
-                let content = tool_result
-                    .content
-                    .into_iter()
-                    .filter_map(|content| match content {
-                        ToolResultContent::Text(txt) => {
-                            let text = serde_json::from_str::<serde_json::Value>(&txt.text)
-                                .as_ref()
-                                .map(|v| v.as_str().unwrap_or(&txt.text).to_string())
-                                .unwrap_or(txt.text)
-                                .trim()
-                                .to_string();
-                            Some(text)
+            for content in content.iter() {
+                match content {
+                    UserContent::Text(txt) => {
+                        if txt.text.starts_with("<environment_details>") {
+                            continue;
                         }
-                        _ => None,
-                    })
-                    .join("\n");
-                let is_success = !content.contains("<error>");
-                // draw sigle line without folding
-                if content.lines().count() == 1 && content.len() < width as usize {
-                    line.spans.push(Span::raw("tool_result: "));
-                    line.spans
-                        .push(Span::styled(content, theme.tool_result_style(is_success)));
-                    lines.push(line);
-                } else {
-                    let suffix = if is_opened { "⯆" } else { "▶" };
-                    line.spans.push(Span::raw("tool_result: "));
-                    line.spans.push(Span::styled(
-                        format!(
-                            "{} {}",
-                            if is_success { "SUCCESS" } else { "ERROR" },
-                            suffix
-                        ),
-                        theme.tool_result_style(is_success),
-                    ));
-                    lines.push(line);
-                    if is_opened {
-                        // TODO: code highlight
-                        lines.extend(ratskin.parse_text(&format!("```\n{}\n```", content), width));
+                        let line = role_prefix("User", theme.user);
+                        format_text_wrapped(&mut lines, &txt.text, line, width.into());
                     }
+                    UserContent::Image(image) => {
+                        let mut line = role_prefix("User", theme.user);
+                        line.spans.push(Span::raw(format!(
+                            "🖼️ Image data: {} bytes",
+                            (image.data.len() / 4) * 3,
+                        )));
+                        lines.push(line);
+                    }
+                    UserContent::ToolResult(tool_result) => {
+                        let mut line = role_prefix("User", theme.user);
+                        let content = tool_result
+                            .content
+                            .clone()
+                            .into_iter()
+                            .filter_map(|content| match content {
+                                ToolResultContent::Text(txt) => {
+                                    let mut text =
+                                        serde_json::from_str::<serde_json::Value>(&txt.text)
+                                            .as_ref()
+                                            .map(|v| v.as_str().unwrap_or(&txt.text).to_string())
+                                            .unwrap_or(txt.text)
+                                            .trim()
+                                            .to_string();
+                                    if text.len() > 2048 {
+                                        text.truncate(2048);
+                                        text.insert_str(2048, "\n...truncated...\n");
+                                    }
+                                    Some(text)
+                                }
+                                ToolResultContent::Image(image) => Some(format!(
+                                    "🖼️ Image data: {} bytes",
+                                    (image.data.len() / 4) * 3,
+                                )),
+                            })
+                            .join("\n");
+                        let is_success = !content.contains("<error>");
+                        // draw sigle line without folding
+                        if content.lines().count() == 1 && content.len() < width as usize {
+                            line.spans.push(Span::raw("tool_result: "));
+                            line.spans
+                                .push(Span::styled(content, theme.tool_result_style(is_success)));
+                            lines.push(line);
+                        } else {
+                            let suffix = if is_opened { "⯆" } else { "▶" };
+                            line.spans.push(Span::raw("tool_result: "));
+                            line.spans.push(Span::styled(
+                                format!(
+                                    "{} {}",
+                                    if is_success { "SUCCESS" } else { "ERROR" },
+                                    suffix
+                                ),
+                                theme.tool_result_style(is_success),
+                            ));
+                            lines.push(line);
+                            if is_opened {
+                                // TODO: code highlight
+                                lines.extend(
+                                    ratskin.parse_text(&format!("```\n{}\n```", content), width),
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         }

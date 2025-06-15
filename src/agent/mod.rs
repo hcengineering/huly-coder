@@ -41,6 +41,7 @@ use rig::completion::CompletionModel;
 use rig::completion::CompletionResponse;
 use rig::embeddings::EmbeddingsBuilder;
 use rig::message::AssistantContent;
+use rig::message::ImageMediaType;
 use rig::message::Message;
 use rig::message::ToolCall;
 use rig::message::ToolResultContent;
@@ -214,7 +215,7 @@ impl Agent {
         };
 
         let mut system_prompt_addons = Vec::default();
-        for server_config in mcp_config.servers.values() {
+        for (server_id, server_config) in mcp_config.servers.iter() {
             match &server_config.transport {
                 McpClientTransport::Stdio(config) => {
                     let transport = mcp_core::transport::ClientStdioTransport::new(
@@ -229,8 +230,18 @@ impl Agent {
                                 .unwrap_or(ProtocolVersion::V2025_03_26),
                         )
                         .build();
-                    mcp_client.open().await?;
-                    mcp_client.initialize().await?;
+                    mcp_client.open().await.with_context(|| {
+                        format!(
+                            "Failed to open MCP client {} with command {}",
+                            server_id, config.command
+                        )
+                    })?;
+                    mcp_client.initialize().await.with_context(|| {
+                        format!(
+                            "Failed to open MCP client {} with command {}",
+                            server_id, config.command
+                        )
+                    })?;
                     let tools_list_res = mcp_client.list_tools(None, None).await?;
 
                     agent_builder = tools_list_res
@@ -610,7 +621,7 @@ impl AgentContext {
                                 .iter()
                                 .map(|t| match t {
                                     ToolResultContent::Text(text) => count_tokens(&text.text),
-                                    _ => 0,
+                                    ToolResultContent::Image(img) => count_tokens(&img.data),
                                 })
                                 .sum::<u32>(),
                             _ => 0,
@@ -806,10 +817,43 @@ async fn process_messages(mut ctx: AgentContext, mut agent: Box<dyn HulyAgent>) 
                 _ => {}
             }
         }
+        let tool_result_content: OneOrMany<ToolResultContent> = {
+            // due incomplete rig_mcp implementation we try detect image data in response and split message
+            if tool_result.contains("|image-data:") {
+                let mut parts = tool_result.split("|image-data:");
+                let text = parts.next().unwrap();
+                let image_data = parts.next().unwrap();
+                let mut image_parts = image_data.split(";base64,");
+                let image_type = image_parts.next().unwrap();
+                let image_data = image_parts.next().unwrap();
+                tracing::info!("image type: '{}'", image_type);
+                OneOrMany::many([
+                    ToolResultContent::text(text),
+                    ToolResultContent::image(
+                        image_data,
+                        None, //.Some(rig::message::ContentFormat::Base64),
+                        match image_type {
+                            "image/png" => Some(ImageMediaType::PNG),
+                            "image/jpeg" => Some(ImageMediaType::JPEG),
+                            "image/gif" => Some(ImageMediaType::GIF),
+                            "image/webp" => Some(ImageMediaType::WEBP),
+                            "image/heic" => Some(ImageMediaType::HEIC),
+                            "image/heif" => Some(ImageMediaType::HEIF),
+                            "image/svg+xml" => Some(ImageMediaType::SVG),
+                            _ => Some(ImageMediaType::PNG),
+                        },
+                        None,
+                    ),
+                ])
+                .unwrap()
+            } else {
+                OneOrMany::one(ToolResultContent::text(tool_result))
+            }
+        };
         let result_message = Message::User {
             content: OneOrMany::one(UserContent::tool_result(
                 tool_call.id.clone(),
-                OneOrMany::one(ToolResultContent::text(tool_result)),
+                tool_result_content,
             )),
         };
         ctx.add_message(ctx.add_env_message(result_message).await)

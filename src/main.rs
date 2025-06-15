@@ -60,6 +60,7 @@ fn init_logger() {
                         .with_target("ort", tracing::Level::WARN)
                         .with_target("tokenizers", tracing::Level::WARN)
                         .with_target("process_wrap", tracing::Level::INFO)
+                        .with_target("mcp_core::transport::client", tracing::Level::INFO)
                         .with_default(tracing::Level::DEBUG),
                 ),
         )
