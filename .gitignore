@@ -6,3 +6,4 @@ data/
 *.pdb
 huly-coder-local.yaml
 /.fastembed_cache/
+/npm/huly-coder-*
