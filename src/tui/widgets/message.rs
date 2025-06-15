@@ -116,7 +116,7 @@ fn process_message<'a>(
                             .content
                             .clone()
                             .into_iter()
-                            .filter_map(|content| match content {
+                            .map(|content| match content {
                                 ToolResultContent::Text(txt) => {
                                     let mut text =
                                         serde_json::from_str::<serde_json::Value>(&txt.text)
@@ -129,12 +129,11 @@ fn process_message<'a>(
                                         text.truncate(2048);
                                         text.insert_str(2048, "\n...truncated...\n");
                                     }
-                                    Some(text)
+                                    text
                                 }
-                                ToolResultContent::Image(image) => Some(format!(
-                                    "🖼️ Image data: {} bytes",
-                                    (image.data.len() / 4) * 3,
-                                )),
+                                ToolResultContent::Image(image) => {
+                                    format!("🖼️ Image data: {} bytes", (image.data.len() / 4) * 3,)
+                                }
                             })
                             .join("\n");
                         let is_success = !content.contains("<error>");

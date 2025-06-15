@@ -225,19 +225,18 @@ impl CompletionModel {
                             match tool_content {
                                 rig::message::UserContent::ToolResult(result) => {
                                     for tool_result_content in result.content.into_iter() {
-                                        match tool_result_content {
-                                            rig::message::ToolResultContent::Image(image) => {
-                                                full_history.push(json!({
-                                                    "role": "user",
-                                                    "content": [{
-                                                        "type": "image_url",
-                                                        "image_url": {
-                                                            "url": format!("data:{};base64,{}", image.media_type.unwrap_or(ImageMediaType::PNG).to_mime_type(), image.data),
-                                                        }
-                                                    }]
-                                                }));
-                                            }
-                                            _ => {}
+                                        if let rig::message::ToolResultContent::Image(image) =
+                                            tool_result_content
+                                        {
+                                            full_history.push(json!({
+                                                "role": "user",
+                                                "content": [{
+                                                    "type": "image_url",
+                                                    "image_url": {
+                                                        "url": format!("data:{};base64,{}", image.media_type.unwrap_or(ImageMediaType::PNG).to_mime_type(), image.data),
+                                                    }
+                                                }]
+                                            }));
                                         }
                                     }
                                 }
