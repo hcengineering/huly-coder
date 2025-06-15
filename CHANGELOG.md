@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.2.1...huly-coder-v0.3.0) (2025-06-15)
+
+
+### Features
+
+* rewrite OpenRouter provider to support image data response from MCP tools, add example for puppeteer MCP server ([8eee6d0](https://github.com/hcengineering/huly-coder/commit/8eee6d044873bb402f1d4cdfe1332e7a05077606))
+
+
+### Bug Fixes
+
+* Fix possible crash in messages view, Update MCP declaration example in config, adjust theme colors ([0ce34fd](https://github.com/hcengineering/huly-coder/commit/0ce34fd1eb94349b946c48987a4bd318c2829616))
+
 ## [0.2.1](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.2.0...huly-coder-v0.2.1) (2025-06-03)
 
 

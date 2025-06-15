@@ -10,7 +10,7 @@ repository = "https://github.com/hcengineering/huly-coder"
 
 [package]
 name = "huly-coder"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 homepage = "https://github.com/hcengineering/huly-coder"
