@@ -11,6 +11,7 @@ A lightweight autonomous AI coding agent with terminal-based UI, inspired by Cod
 - **Web Integration**: Built-in web search and URL fetching capabilities
 - **Memory System**: Persistent knowledge graph for maintaining context across sessions
 - **Multiple LLM Providers**: Support for OpenRouter, LMStudio, and OpenAI
+- **MCP Servers**: Support for multiple MCP servers 
 - **Docker Support**: Easy containerization for portable development environments
 
 ## Configuration
@@ -27,7 +28,18 @@ user_instructions: |               # Custom personality/role instructions
     Your goal is to build working software based on user request.
 ```
 
-## Official Docker Image
+## Running
+There are several ways to run Huly Coder:
+
+### From NPM Registry
+
+Create a `huly-coder-local.yaml` file with overrided configurations and run the following command:
+
+```bash
+npx huly-coder -d <data_dir> -s <huly-coder-local.yaml>
+```
+
+### Official Docker Image
 
 To run Huly Coder in docker, create a `huly-coder-local.yaml` file in your `data` directory with overrided configurations and run the following command:
 
@@ -37,14 +49,16 @@ docker run -e DOCKER_RUN=1 \
     -v "<data_dir>:/data" \
     -v "<data_dir>/.fastembed_cache:/.fastembed_cache" \
     -it --rm hardcoreeng/huly-coder:latest
+    --config /data/huly-coder-local.yaml
+    --data /data
 ```
 
-## Local Run
+### Local Run
 
 To run Huly Coder locally, run:
 
 ```bash
-cargo run
+cargo run -d <data_dir> -s <huly-coder-local.yaml>
 ```
 
 ## Docker
