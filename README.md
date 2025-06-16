@@ -36,7 +36,7 @@ There are several ways to run Huly Coder:
 Create a `huly-coder-local.yaml` file with overrided configurations and run the following command:
 
 ```bash
-npx huly-coder -d <data_dir> -s <huly-coder-local.yaml>
+npx huly-coder -d <data_dir> -c <huly-coder-local.yaml>
 ```
 
 ### Official Docker Image
@@ -58,7 +58,7 @@ docker run -e DOCKER_RUN=1 \
 To run Huly Coder locally, run:
 
 ```bash
-cargo run -d <data_dir> -s <huly-coder-local.yaml>
+cargo run -d <data_dir> -c <huly-coder-local.yaml>
 ```
 
 ## Docker
