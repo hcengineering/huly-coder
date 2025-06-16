@@ -21,7 +21,7 @@ function getExePath() {
 
     try {
         // Since the binary will be located inside `node_modules`, we can simply call `require.resolve`
-        return require.resolve(`app-${os}-${arch}/bin/app${extension}`);
+        return require.resolve(`huly-coder-${os}-${arch}/bin/huly-coder${extension}`);
     } catch (e) {
         throw new Error(
             `Couldn't find application binary inside node_modules for ${os}-${arch}`
@@ -34,7 +34,10 @@ function getExePath() {
  */
 function run() {
     const args = process.argv.slice(2);
-    const processResult = spawnSync(getExePath(), args, { stdio: "inherit" });
+    const path = getExePath();
+    const pathSeparator = ["win32", "cygwin"].includes(process.platform) ? "\\" : "/";
+    const parentDir = path.split(pathSeparator).slice(0, -2).join(pathSeparator);
+    const processResult = spawnSync(path, args, { cwd: parentDir, stdio: "inherit" });
     process.exit(processResult.status ?? 0);
 }
 

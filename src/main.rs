@@ -1,8 +1,10 @@
+use std::fs;
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::io;
 use std::io::stdout;
 use std::panic::set_hook;
 use std::panic::take_hook;
+use std::path::Path;
 
 use crossterm::execute;
 use crossterm::terminal::disable_raw_mode;
@@ -29,8 +31,8 @@ pub mod templates;
 pub mod tools;
 mod tui;
 
-const HISTORY_PATH: &str = "data/history.json";
-const CONFIG_STATE_FILE_PATH: &str = "data/config_state.yaml";
+const HISTORY_PATH: &str = "history.json";
+const CONFIG_STATE_FILE_PATH: &str = "config_state.yaml";
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -38,10 +40,17 @@ struct Args {
     /// Skip loading previous session from history.json file
     #[arg(short, long)]
     skip_load_messages: bool,
+    /// Path to data directory
+    #[arg(short, long, default_value = "data")]
+    data: String,
+    /// Path to config file
+    #[arg(short, long, default_value = "huly-coder-local.yaml")]
+    config: String,
 }
 
-fn init_logger() {
-    let writer = tracing_appender::rolling::daily("data/logs", "huly-coder.log");
+fn init_logger(data_dir: &str) {
+    let log_dir = Path::new(data_dir).join("logs");
+    let writer = tracing_appender::rolling::daily(log_dir, "huly-coder.log");
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::layer()
@@ -96,31 +105,46 @@ pub fn restore_tui() -> io::Result<()> {
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     init_panic_hook();
-    init_logger();
     let args = Args::parse();
 
+    init_logger(&args.data);
+
     tracing::info!("Start");
-    let config = Config::new()?;
+    let config = match Config::new(&args.config) {
+        Ok(config) => config,
+        Err(e) => {
+            ratatui::restore();
+            println!("Error: Failed to load config");
+            return Err(e);
+        }
+    };
+    let data_dir = Path::new(&args.data);
+    if !data_dir.exists() {
+        fs::create_dir_all(data_dir)?;
+    }
+    let history_path = data_dir.join(HISTORY_PATH);
     // start agent
     let (output_sender, output_receiver) =
         tokio::sync::mpsc::unbounded_channel::<AgentOutputEvent>();
     let (control_sender, control_receiver) =
         tokio::sync::mpsc::unbounded_channel::<AgentControlEvent>();
-    let history = if !args.skip_load_messages && std::path::Path::new(HISTORY_PATH).exists() {
-        serde_json::from_str(&std::fs::read_to_string(HISTORY_PATH).unwrap()).unwrap()
+    let history = if !args.skip_load_messages && history_path.exists() {
+        serde_json::from_str(&std::fs::read_to_string(history_path).unwrap()).unwrap()
     } else {
         Vec::new()
     };
 
-    let model_info = model_info(&config).await?;
+    let model_info = model_info(&args.data, &config).await?;
     tracing::info!("Model info: {:?}", model_info);
 
-    let mut agent = agent::Agent::new(config.clone(), output_sender);
+    let mut agent = agent::Agent::new(&args.data, config.clone(), output_sender);
     let memory_index = agent.init_memory_index().await;
 
     let messages = history.clone();
     let agent_handler = tokio::spawn(async move {
-        agent.run(control_receiver, messages, memory_index).await;
+        agent
+            .run(&args.data, control_receiver, messages, memory_index)
+            .await;
     });
 
     let terminal = init_tui().unwrap();

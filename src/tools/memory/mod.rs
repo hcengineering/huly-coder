@@ -4,6 +4,7 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::collections::HashSet;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use indicium::simple::{Indexable, SearchIndex};
@@ -19,7 +20,7 @@ use super::AgentToolError;
 mod tests;
 
 const TOOLS_STR: &str = include_str!("tools.json");
-const MEMORY_PATH: &str = "data/memory.yaml";
+const MEMORY_PATH: &str = "memory.yaml";
 
 #[derive(Clone, Deserialize)]
 struct JsonToolDefinition {
@@ -115,6 +116,7 @@ pub struct MemoryManager {
     memory_only: bool,
     knowledge_graph: KnowledgeGraph,
     search_index: SearchIndex<usize>,
+    data_dir: PathBuf,
 }
 
 impl Embed for Entity {
@@ -139,14 +141,15 @@ impl Indexable for Entity {
 }
 
 impl MemoryManager {
-    pub fn new(memory_only: bool) -> Self {
+    pub fn new(data_dir: &str, memory_only: bool) -> Self {
         let knowledge_graph = if !memory_only {
-            serde_yaml::from_str(&fs::read_to_string(MEMORY_PATH).unwrap_or_default()).unwrap_or(
-                KnowledgeGraph {
-                    entities: Vec::new(),
-                    relations: Vec::new(),
-                },
+            serde_yaml::from_str(
+                &fs::read_to_string(Path::new(data_dir).join(MEMORY_PATH)).unwrap_or_default(),
             )
+            .unwrap_or(KnowledgeGraph {
+                entities: Vec::new(),
+                relations: Vec::new(),
+            })
         } else {
             KnowledgeGraph {
                 entities: Vec::new(),
@@ -167,6 +170,7 @@ impl MemoryManager {
             memory_only,
             knowledge_graph,
             search_index,
+            data_dir: PathBuf::from(data_dir),
         }
     }
 
@@ -357,7 +361,7 @@ impl MemoryManager {
             });
         if !self.memory_only {
             fs::write(
-                MEMORY_PATH,
+                self.data_dir.join(MEMORY_PATH),
                 serde_yaml::to_string(&self.knowledge_graph).unwrap(),
             )
             .unwrap();

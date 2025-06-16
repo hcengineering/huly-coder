@@ -132,9 +132,9 @@ pub async fn add_env_message<'a>(
     }
 }
 
-pub fn persist_history(messages: &[Message]) {
+pub fn persist_history(data_dir: &Path, messages: &[Message]) {
     fs::write(
-        HISTORY_PATH,
+        data_dir.join(HISTORY_PATH),
         serde_json::to_string_pretty(messages).unwrap(),
     )
     .unwrap();

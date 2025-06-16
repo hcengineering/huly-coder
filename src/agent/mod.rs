@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::sync::Arc;
 
@@ -87,12 +88,11 @@ struct AgentConfigState {
 }
 
 impl AgentConfigState {
-    pub fn new() -> Self {
-        if Path::new(CONFIG_STATE_FILE_PATH).exists() {
-            serde_yaml::from_str(
-                &std::fs::read_to_string(CONFIG_STATE_FILE_PATH).unwrap_or_default(),
-            )
-            .unwrap_or_default()
+    pub fn new(data_dir: &str) -> Self {
+        let path = Path::new(data_dir).join(CONFIG_STATE_FILE_PATH);
+        if path.exists() {
+            serde_yaml::from_str(&std::fs::read_to_string(path).unwrap_or_default())
+                .unwrap_or_default()
         } else {
             Self {
                 approved_tools: HashSet::default(),
@@ -132,6 +132,7 @@ fn pending_tool_id<'a>(messages: RwLockReadGuard<'a, Vec<Message>>) -> Option<St
 
 struct AgentContext {
     config: Config,
+    data_dir: PathBuf,
     config_state: Arc<RwLock<AgentConfigState>>,
     messages: Arc<RwLock<Vec<Message>>>,
     state: Arc<RwLock<AgentState>>,
@@ -144,11 +145,15 @@ struct AgentContext {
 }
 
 impl Agent {
-    pub fn new(config: Config, sender: mpsc::UnboundedSender<AgentOutputEvent>) -> Self {
+    pub fn new(
+        data_dir: &str,
+        config: Config,
+        sender: mpsc::UnboundedSender<AgentOutputEvent>,
+    ) -> Self {
         Self {
             config,
             sender,
-            memory: Arc::new(RwLock::new(MemoryManager::new(false))),
+            memory: Arc::new(RwLock::new(MemoryManager::new(data_dir, false))),
             process_registry: Arc::new(RwLock::new(ProcessRegistry::default())),
         }
     }
@@ -407,6 +412,7 @@ impl Agent {
 
     pub async fn run(
         &mut self,
+        data_dir: &str,
         receiver: mpsc::UnboundedReceiver<AgentControlEvent>,
         messages: Vec<Message>,
         memory_index: InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>,
@@ -463,10 +469,11 @@ impl Agent {
         let memory_index = Arc::new(RwLock::new(memory_index));
         let sender = self.sender.clone();
         let state = Arc::new(RwLock::new(state));
-        let config_state = Arc::new(RwLock::new(AgentConfigState::new()));
+        let config_state = Arc::new(RwLock::new(AgentConfigState::new(data_dir)));
 
         let events_context = AgentContext {
             config: self.config.clone(),
+            data_dir: PathBuf::from(data_dir),
             config_state: config_state.clone(),
             messages: messages.clone(),
             state: state.clone(),
@@ -480,6 +487,7 @@ impl Agent {
 
         let process_context = AgentContext {
             config: self.config.clone(),
+            data_dir: PathBuf::from(data_dir),
             config_state: config_state.clone(),
             messages: messages.clone(),
             state: state.clone(),
@@ -584,14 +592,14 @@ impl AgentContext {
     async fn persist_history(&self) {
         tracing::debug!("persist_history");
         let messages = self.messages.read().await;
-        persist_history(&messages);
+        persist_history(&self.data_dir, &messages);
     }
 
     async fn persist_config_state(&self) {
         tracing::debug!("persist_config_state");
         let state = self.config_state.read().await;
         fs::write(
-            CONFIG_STATE_FILE_PATH,
+            self.data_dir.join(CONFIG_STATE_FILE_PATH),
             serde_yaml::to_string(&*state).unwrap(),
         )
         .unwrap();

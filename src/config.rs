@@ -8,7 +8,6 @@ use serde::Deserialize;
 
 const CONFIG_FILE: &str = "huly-coder.yaml";
 const LOCAL_CONFIG_FILE: &str = "huly-coder-local.yaml";
-const DOCKER_LOCAL_CONFIG_FILE: &str = "data/huly-coder-local.yaml";
 
 #[derive(Debug, Deserialize, Clone)]
 pub enum ProviderKind {
@@ -98,7 +97,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> color_eyre::Result<Self> {
+    pub fn new(custom_config: &str) -> color_eyre::Result<Self> {
         let mut builder = config::Config::builder()
             .add_source(config::File::with_name(CONFIG_FILE))
             .add_source(config::Environment::with_prefix("HULY_CODER"));
@@ -106,12 +105,6 @@ impl Config {
         if Path::new(LOCAL_CONFIG_FILE).exists() {
             tracing::info!("Found local config at {}", LOCAL_CONFIG_FILE);
             builder = builder.add_source(config::File::with_name(LOCAL_CONFIG_FILE));
-        }
-
-        // Docker related local config file that stored in /data directory
-        if Path::new(DOCKER_LOCAL_CONFIG_FILE).exists() {
-            tracing::info!("Found local config at {}", DOCKER_LOCAL_CONFIG_FILE);
-            builder = builder.add_source(config::File::with_name(DOCKER_LOCAL_CONFIG_FILE));
         }
 
         let user_config = format!(
@@ -122,6 +115,10 @@ impl Config {
         if Path::new(&user_config).exists() {
             tracing::info!("Found user config at {}", user_config);
             builder = builder.add_source(config::File::with_name(&user_config));
+        }
+        if Path::new(custom_config).exists() {
+            tracing::info!("Found custom config at {}", custom_config);
+            builder = builder.add_source(config::File::with_name(custom_config));
         }
         if env::var("DOCKER_RUN").is_ok() {
             builder = builder.set_override("permission_mode", "full_autonomous")?;
