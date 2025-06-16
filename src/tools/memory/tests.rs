@@ -6,7 +6,7 @@ mod tests {
     use serde_json::json;
 
     fn setup() -> MemoryManager {
-        MemoryManager::new(true) // Use memory-only mode for tests
+        MemoryManager::new("data", true) // Use memory-only mode for tests
     }
 
     #[test]
