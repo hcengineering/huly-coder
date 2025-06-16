@@ -157,9 +157,7 @@ fn process_message<'a>(
                             lines.push(line);
                             if is_opened {
                                 // TODO: code highlight
-                                lines.extend(
-                                    ratskin.parse_text(&format!("```\n{}\n```", content), width),
-                                );
+                                lines.extend(ratskin.parse_text(&content, width));
                             }
                         }
                     }
@@ -188,7 +186,7 @@ fn process_message<'a>(
                                 let mut line = role_prefix("Assistant", theme.assistant);
                                 let parts =
                                         // add space prefix to correct first line with wrapping
-                                        ratskin.parse_text(&format!("           {}", &text), width);
+                                        ratskin.parse_text(&format!("Assistant:{}", &text), width);
                                 if let Some(first_line) = parts.first() {
                                     let mut spans = first_line
                                         .spans
@@ -197,11 +195,9 @@ fn process_message<'a>(
                                         .enumerate()
                                         .map(|(i, s)| {
                                             if i == 0 {
-                                                s.clone()
-                                                    .style(theme.text_style())
-                                                    .content(s.content.trim().to_string())
+                                                s.clone().content(s.content[10..].to_string())
                                             } else {
-                                                s.style(theme.text_style())
+                                                s
                                             }
                                         })
                                         .collect::<Vec<_>>();
