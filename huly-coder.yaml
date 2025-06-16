@@ -87,7 +87,7 @@ web_search:
 #     puppeteer:
 #       transport:
 #         type: stdio
-#         command: "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe"
+#         command: docker.exe
 #         args: ["run", "-i", "--rm", "--init", "-e", "DOCKER_CONTAINER=true", "mcp/puppeteer"]
 #         protocol_version: 2024-11-05
 
