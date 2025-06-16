@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.3.0...huly-coder-v0.3.1) (2025-06-16)
+
+
+### Bug Fixes
+
+* Fix npm package ([dc94aa0](https://github.com/hcengineering/huly-coder/commit/dc94aa0d0ea3ffe7b20b1e9ef19c6535ab5f999e))
+* Message color fix in TUI ([7c806c9](https://github.com/hcengineering/huly-coder/commit/7c806c99843d6625faac199b5a055013e6999a57))
+
 ## [0.3.0](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.2.1...huly-coder-v0.3.0) (2025-06-15)
 
 
