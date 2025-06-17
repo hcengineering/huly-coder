@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.3.1...huly-coder-v0.3.2) (2025-06-17)
+
+
+### Bug Fixes
+
+* Create workspace directory on start if directory not exists ([26ff0fc](https://github.com/hcengineering/huly-coder/commit/26ff0fc5294be0adc136611a2534838b89750ecf))
+
 ## [0.3.1](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.3.0...huly-coder-v0.3.1) (2025-06-16)
 
 
