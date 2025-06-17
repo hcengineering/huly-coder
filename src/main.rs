@@ -122,6 +122,11 @@ async fn main() -> color_eyre::Result<()> {
     if !data_dir.exists() {
         fs::create_dir_all(data_dir)?;
     }
+
+    if !config.workspace.exists() {
+        fs::create_dir_all(&config.workspace)?;
+    }
+
     let history_path = data_dir.join(HISTORY_PATH);
     // start agent
     let (output_sender, output_receiver) =
