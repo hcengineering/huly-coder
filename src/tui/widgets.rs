@@ -184,6 +184,18 @@ impl Widget for &mut App<'_> {
         }
         let chat_len = messages.len();
 
+        if self
+            .ui
+            .history_state
+            .selected
+            .is_some_and(|idx| idx >= chat_len)
+            && chat_len >= 1
+        {
+            self.ui.history_state.selected = Some(chat_len - 1);
+        } else if chat_len == 0 {
+            self.ui.history_state.selected = None;
+        }
+
         let builder = ListBuilder::new(|context| {
             if let Some(mut item) = messages.get(context.index).cloned() {
                 item.is_selected = context.is_selected;
@@ -204,7 +216,7 @@ impl Widget for &mut App<'_> {
                     .thumb_symbol("▐"),
             )
             .infinite_scrolling(false)
-            .scroll_padding(2);
+            .scroll_padding(0);
 
         list.render(layout.chat_area, buf, &mut self.ui.history_state);
 
