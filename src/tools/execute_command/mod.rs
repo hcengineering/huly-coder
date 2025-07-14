@@ -13,10 +13,7 @@ use crate::agent::event::AgentCommandStatus;
 
 pub mod tools;
 
-#[cfg(unix)]
 const SHELL: &str = "bash";
-#[cfg(windows)]
-const SHELL: &str = "cmd";
 
 #[derive(Default)]
 pub struct ProcessRegistry {
@@ -167,11 +164,7 @@ impl ProcessRegistry {
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped());
 
-            #[cfg(unix)]
             cmd.arg("-c");
-
-            #[cfg(windows)]
-            cmd.arg("/C");
 
             cmd.arg(command);
         });
