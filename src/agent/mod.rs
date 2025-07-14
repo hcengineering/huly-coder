@@ -549,6 +549,7 @@ impl AgentContext {
         add_env_message(
             &mut message,
             self.memory_index.clone(),
+            &self.data_dir,
             &self.config.workspace,
             self.process_registry.clone(),
         )

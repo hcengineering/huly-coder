@@ -51,6 +51,7 @@ pub async fn add_env_message<'a>(
     memory_index: Arc<
         tokio::sync::RwLock<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, memory::Entity>>,
     >,
+    data_dir: &'a Path,
     workspace: &'a Path,
     process_registry: Arc<RwLock<ProcessRegistry>>,
 ) {
@@ -116,19 +117,19 @@ pub async fn add_env_message<'a>(
                 )
             })
             .join("\n");
-        content.push(UserContent::text(
-            subst::substitute(
-                ENV_DETAILS,
-                &HashMap::from([
-                    ("TIME", chrono::Local::now().to_rfc2822().as_str()),
-                    ("WORKING_DIR", &workspace),
-                    ("MEMORY_ENTRIES", &memory_entries),
-                    ("COMMANDS", &commands),
-                    ("FILES", files),
-                ]),
-            )
-            .unwrap(),
-        ));
+        let env_content = subst::substitute(
+            ENV_DETAILS,
+            &HashMap::from([
+                ("TIME", chrono::Local::now().to_rfc2822().as_str()),
+                ("WORKING_DIR", &workspace),
+                ("MEMORY_ENTRIES", &memory_entries),
+                ("COMMANDS", &commands),
+                ("FILES", files),
+            ]),
+        )
+        .unwrap();
+        fs::write(data_dir.join("env.txt"), &env_content).unwrap();
+        content.push(UserContent::text(env_content));
     }
 }
 
