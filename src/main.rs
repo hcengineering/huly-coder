@@ -146,6 +146,7 @@ async fn main() -> color_eyre::Result<()> {
     let memory_index = agent.init_memory_index().await;
 
     let messages = history.clone();
+    let data_dir = args.data.clone();
     let agent_handler = tokio::spawn(async move {
         agent
             .run(&args.data, control_receiver, messages, memory_index)
@@ -153,9 +154,16 @@ async fn main() -> color_eyre::Result<()> {
     });
 
     let terminal = init_tui().unwrap();
-    let result = tui::App::new(config, model_info, control_sender, output_receiver, history)
-        .run(terminal)
-        .await;
+    let result = tui::App::new(
+        config,
+        data_dir.into(),
+        model_info,
+        control_sender,
+        output_receiver,
+        history,
+    )
+    .run(terminal)
+    .await;
     let _ = agent_handler.await;
     ratatui::restore();
     result

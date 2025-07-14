@@ -1,7 +1,8 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::collections::{HashMap, HashSet};
+use std::io::Write;
 use std::path::PathBuf;
-use std::vec;
+use std::{fs, vec};
 
 use crate::agent::event::{AgentCommandStatus, AgentState, ConfirmToolResponse};
 use crate::config::Config;
@@ -14,6 +15,7 @@ use crate::{
         Theme,
     },
 };
+use anyhow::Result;
 use crossterm::event::KeyEventKind;
 use ratatui::layout::Position;
 use ratatui::prelude::Rect;
@@ -22,7 +24,7 @@ use ratatui::{
     widgets::ScrollbarState,
     DefaultTerminal,
 };
-use rig::message::{Message, UserContent};
+use rig::message::{AssistantContent, Message, UserContent};
 use rig::tool::Tool;
 use tokio::sync::mpsc;
 use tui_textarea::TextArea;
@@ -96,6 +98,7 @@ pub struct UiState<'a> {
 #[derive(Debug)]
 pub struct App<'a> {
     pub config: Config,
+    pub data_dir: PathBuf,
     pub running: bool,
     pub events: UiEventMultiplexer,
     pub agent_sender: mpsc::UnboundedSender<agent::AgentControlEvent>,
@@ -136,6 +139,7 @@ impl ModelState {
 impl App<'_> {
     pub fn new(
         config: Config,
+        data_dir: PathBuf,
         model_info: ModelInfo,
         sender: mpsc::UnboundedSender<agent::AgentControlEvent>,
         receiver: mpsc::UnboundedReceiver<agent::AgentOutputEvent>,
@@ -144,12 +148,75 @@ impl App<'_> {
         Self {
             ui: UiState::new(config.workspace.clone()),
             config,
+            data_dir,
             running: true,
             events: UiEventMultiplexer::new(receiver),
             agent_sender: sender,
             theme: Theme::default(),
             model: ModelState::new(messages, model_info),
         }
+    }
+
+    fn export_history(&self) -> Result<()> {
+        let file = fs::File::create(self.data_dir.join("history.md"))?;
+        let mut writer = std::io::BufWriter::new(file);
+
+        for message in self.model.messages.iter() {
+            match message {
+                Message::User { content } => {
+                    for item in content.iter() {
+                        match item {
+                            UserContent::Text(text) => {
+                                if text.text.starts_with("<environment_details>") {
+                                    continue;
+                                }
+                                write!(writer, "### User\n\n{}\n\n", text.text)?;
+                            }
+                            UserContent::Image(image) => {
+                                write!(writer, "### User\n\n![image](data:{})\n\n", image.data)?;
+                            }
+                            UserContent::ToolResult(tool_result) => {
+                                write!(
+                                    writer,
+                                    "### User Tool Result\n\n{}\n\n",
+                                    match tool_result.content.first() {
+                                        rig::message::ToolResultContent::Text(text) =>
+                                            match serde_json::from_str::<serde_json::Value>(
+                                                &text.text
+                                            ) {
+                                                Ok(v) =>
+                                                    v.as_str().unwrap_or(&text.text).to_string(),
+                                                Err(_) => text.text,
+                                            },
+                                        rig::message::ToolResultContent::Image(image) =>
+                                            format!("![image](data:{})", image.data),
+                                    }
+                                )?;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                Message::Assistant { content } => {
+                    for item in content.iter() {
+                        match item {
+                            AssistantContent::Text(text) => {
+                                write!(writer, "### Assistant\n\n{}\n\n", text.text)?;
+                            }
+                            AssistantContent::ToolCall(tool_call) => {
+                                write!(
+                                    writer,
+                                    "### Assistant [{}]\n\n{}\n\n",
+                                    tool_call.function.name,
+                                    serde_yaml::to_string(&tool_call.function.arguments).unwrap()
+                                )?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
@@ -485,6 +552,9 @@ impl App<'_> {
                 self.agent_sender
                     .send(AgentControlEvent::CancelTask)
                     .unwrap()
+            }
+            KeyCode::Char('e') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.export_history().unwrap();
             }
             KeyCode::BackTab => {
                 let mut focus = self.ui.focus.clone() as u8;
