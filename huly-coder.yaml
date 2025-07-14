@@ -28,6 +28,14 @@ model: anthropic/claude-3.5-sonnet
 #provider_api_key: sk-xxxxxxxxxxxxxxxxxxxxx
 #provider_base_url: http://127.0.0.1:1234/v1
 
+# Advanced provider configuration (optional)
+# For example, you can configure openrouter provider routing configuration(https://openrouter.ai/docs/features/provider-routing) as follows:
+# provider_config:
+#   provider:
+#     order: [ "openai", "together"]
+#     allow_fallbacks: false
+      
+
 #---------------------------------------
 # Permission mode
 #---------------------------------------

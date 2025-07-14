@@ -327,6 +327,9 @@ impl Agent {
         M: CompletionModel,
     {
         agent_builder = agent_builder.temperature(0.0);
+        if let Some(config) = &context.config.provider_config {
+            agent_builder = agent_builder.additional_params(config.clone());
+        }
         let mut system_prompt = context.system_prompt.clone();
         let mcp_config = context.config.mcp.as_ref();
         agent_builder = Self::add_static_tools(agent_builder, context);

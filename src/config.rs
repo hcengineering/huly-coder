@@ -87,6 +87,7 @@ pub struct Config {
     pub provider: ProviderKind,
     pub provider_api_key: Option<String>,
     pub provider_base_url: Option<String>,
+    pub provider_config: Option<serde_json::Value>,
     pub model: String,
     pub permission_mode: PermissionMode,
     pub workspace: PathBuf,
