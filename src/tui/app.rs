@@ -86,6 +86,7 @@ pub struct UiState<'a> {
     pub focus: FocusedComponent,
     pub tree_state: FileTreeState,
     pub history_state: ListState,
+    pub history_follow_last: bool,
     pub history_opened_state: HashSet<usize>,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
     pub widget_areas: HashMap<FocusedComponent, Rect>,
@@ -110,6 +111,7 @@ impl UiState<'_> {
             focus: FocusedComponent::Input,
             tree_state: FileTreeState::new(workspace),
             history_state: ListState::default(),
+            history_follow_last: false,
             history_opened_state: HashSet::default(),
             throbber_state: throbber_widgets_tui::ThrobberState::default(),
             widget_areas: HashMap::default(),
@@ -152,9 +154,7 @@ impl App<'_> {
 
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         if !self.model.messages.is_empty() {
-            self.ui
-                .history_state
-                .select(Some(self.model.messages.len() - 1));
+            self.ui.history_follow_last = true;
         }
         while self.running {
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
@@ -288,20 +288,19 @@ impl App<'_> {
                         AgentOutputEvent::NewTask => {
                             self.model.messages.clear();
                             self.ui.history_state.select(None);
+                            self.ui.history_follow_last = false;
                             self.ui.history_opened_state.clear();
                             self.ui.focus = FocusedComponent::Input;
                         }
                         AgentOutputEvent::AddMessage(message) => {
                             self.model.messages.push(message);
-                            self.ui
-                                .history_state
-                                .select(Some(self.model.messages.len() - 1));
+                            self.ui.history_follow_last = true;
                         }
                         AgentOutputEvent::UpdateMessage(message) => {
                             if !self.model.messages.is_empty() {
                                 let len = self.model.messages.len() - 1;
                                 self.model.messages[len] = message;
-                                self.ui.history_state.select(Some(len));
+                                self.ui.history_follow_last = true;
                             }
                         }
                         AgentOutputEvent::CommandStatus(status) => {

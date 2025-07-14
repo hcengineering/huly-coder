@@ -184,6 +184,11 @@ impl Widget for &mut App<'_> {
         }
         let chat_len = messages.len();
 
+        if self.ui.history_follow_last && chat_len >= 1 {
+            self.ui.history_follow_last = false;
+            self.ui.history_state.select(Some(chat_len - 1));
+        }
+
         if self
             .ui
             .history_state
