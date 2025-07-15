@@ -521,10 +521,12 @@ impl App<'_> {
                         .agent_sender
                         .send(AgentControlEvent::ConfirmTool(ConfirmToolResponse::Approve))
                         .unwrap(),
-                    KeyCode::Esc => self
-                        .agent_sender
-                        .send(AgentControlEvent::ConfirmTool(ConfirmToolResponse::Deny))
-                        .unwrap(),
+                    KeyCode::Esc => {
+                        self.agent_sender
+                            .send(AgentControlEvent::ConfirmTool(ConfirmToolResponse::Deny))
+                            .unwrap();
+                        self.ui.focus = FocusedComponent::Input;
+                    }
                     KeyCode::Char('a') | KeyCode::Char('A') => self
                         .agent_sender
                         .send(AgentControlEvent::ConfirmTool(

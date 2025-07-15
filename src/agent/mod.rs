@@ -706,7 +706,7 @@ async fn handle_control_events(
                             "Tool execution denied",
                         ))
                         .await;
-                        ctx.set_state(AgentState::WaitingResponse, "tool_deny")
+                        ctx.set_state(AgentState::WaitingUserPrompt, "tool_deny")
                             .await;
                     }
                     ConfirmToolResponse::AlwaysApprove => {
