@@ -16,28 +16,38 @@ impl ShortcutsWidget {
             .border_type(BorderType::Plain)
             .border_style(theme.border_style(false))
             .style(Style::default().bg(theme.background));
-
-        let shortcuts_text = Text::from(vec![Line::from(vec![
-            Span::styled("^n", theme.highlight_style()),
-            Span::styled(": New Task | ", theme.inactive_style()),
-            Span::styled("^p", theme.highlight_style()),
-            Span::styled(": Pause/Resume Task | ", theme.inactive_style()),
-            Span::styled("⇥", theme.highlight_style()),
-            Span::styled(": Change Focus | ", theme.inactive_style()),
+        let shortcuts = [
+            ("^n", "New Task"),
+            ("^p", "Pause/Resume Task"),
+            ("⇥", "Change Focus"),
             #[cfg(target_os = "macos")]
-            Span::styled("⌥[1-4]", theme.highlight_style()),
+            ("⌥[1-4]", "Focus Panel"),
             #[cfg(not(target_os = "macos"))]
-            Span::styled("Alt+[1-4]", theme.highlight_style()),
-            Span::styled(": Focus Panel | ", theme.inactive_style()),
-            Span::styled("↑↓", theme.highlight_style()),
-            Span::styled(": Navigate | ", theme.inactive_style()),
-            Span::styled("Enter", theme.highlight_style()),
-            Span::styled(": Select | ", theme.inactive_style()),
-            Span::styled("^e", theme.highlight_style()),
-            Span::styled(": Export History | ", theme.inactive_style()),
-            Span::styled("^w", theme.highlight_style()),
-            Span::styled(": Quit ", theme.inactive_style()),
-        ])]);
+            ("Alt+[1-4]", "Focus Panel"),
+            ("↑↓", "Navigate"),
+            ("Enter", "Select"),
+            ("^e", "Export History"),
+            ("^w", "Quit"),
+        ];
+
+        let shortcuts_text = Text::from(Line::from(
+            shortcuts
+                .iter()
+                .flat_map(|(shortcut, description)| {
+                    [
+                        Span::styled(
+                            shortcut.to_string(),
+                            Style::default().fg(theme.highlight_text),
+                        ),
+                        Span::styled(
+                            format!(": {description}"),
+                            Style::default().fg(theme.inactive_text),
+                        ),
+                        Span::styled(format!(" | "), Style::default().fg(theme.text)),
+                    ]
+                })
+                .collect::<Vec<_>>(),
+        ));
 
         Paragraph::new(shortcuts_text)
             .block(block)

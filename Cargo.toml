@@ -73,7 +73,7 @@ headless_chrome = "1.0.17"
 
 # tui
 crossterm = { version = "0.28.1", features = ["event-stream"] }
-ratatui = "0.29.0"
+ratatui = { version = "0.29.0", features = ["serde"] }
 color-eyre = "0.6.3"
 tui-textarea = { git = "https://github.com/kosz78/tui-textarea.git", branch = "main" }
 tui-tree-widget = "0.23.0"
@@ -83,3 +83,4 @@ throbber-widgets-tui = "0.8.0"
 tui-popup = "0.6.0"
 format_num = "0.1.0"
 termimad = "0.31.3"
+ansi_colours = "1.2.3"

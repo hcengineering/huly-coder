@@ -163,7 +163,7 @@ impl Widget for &mut App<'_> {
             .padding(Padding::bottom(1))
             .title(" History ")
             .title_alignment(Alignment::Right)
-            .title_style(theme.primary_style())
+            .title_style(theme.text_style())
             .border_type(BorderType::Rounded)
             .border_style(theme.border_style(matches!(self.ui.focus, FocusedComponent::History)));
 
@@ -270,7 +270,7 @@ impl Widget for &mut App<'_> {
         self.ui.textarea.set_cursor_line_style(theme.text_style());
         self.ui
             .textarea
-            .set_placeholder_style(theme.inactive_style());
+            .set_placeholder_style(Style::default().fg(theme.inactive_text));
         self.ui
             .textarea
             .set_placeholder_text("Type your message here...");
@@ -279,7 +279,7 @@ impl Widget for &mut App<'_> {
         self.ui.textarea.render(layout.input_area, buf);
 
         // File tree
-        FileTreeWidget.render(layout.tree_area, buf, &mut self.ui.tree_state);
+        FileTreeWidget.render(layout.tree_area, buf, &mut self.ui.tree_state, &theme);
 
         TerminalWidget.render(
             layout.terminal_area,

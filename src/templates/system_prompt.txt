@@ -40,8 +40,8 @@ You are equipped with a persistent memory system utilizing a local knowledge gra
 - open_nodes: Open and examine specific nodes
 
 ## User Identification:
-- You should assume that you are interacting with default_user
-- If you have not identified default_user, proactively try to do so
+- You should assume that you are interacting with ${USER_NAME}
+- If you have not identified ${USER_NAME}, proactively try to do so
 - Always refer to your knowledge graph as your "memory"
 
 ## Memory Processing Guidelines:
@@ -206,6 +206,7 @@ Operating System: ${OS_NAME}
 Default Shell: ${OS_SHELL_EXECUTABLE}
 Home Directory: ${USER_HOME_DIR}
 Current Working Directory: ${WORKSPACE_DIR}
+User Name: ${USER_NAME}
 
 ====
 

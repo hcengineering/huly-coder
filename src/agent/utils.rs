@@ -10,6 +10,7 @@ use rig::vector_store::in_memory_store::InMemoryVectorIndex;
 use rig::vector_store::VectorStoreIndex;
 use tokio::sync::RwLock;
 
+use crate::config::Config;
 use crate::templates::{ENV_DETAILS, SYSTEM_PROMPT};
 use crate::tools::execute_command::ProcessRegistry;
 use crate::tools::memory::{self, Entity};
@@ -27,8 +28,9 @@ fn get_shell_path() -> String {
     }
 }
 
-pub async fn prepare_system_prompt(workspace_dir: &Path, user_instructions: &str) -> String {
-    let workspace_dir = workspace_dir
+pub async fn prepare_system_prompt(config: &Config) -> String {
+    let workspace_dir = config
+        .workspace
         .as_os_str()
         .to_str()
         .unwrap()
@@ -37,10 +39,11 @@ pub async fn prepare_system_prompt(workspace_dir: &Path, user_instructions: &str
         SYSTEM_PROMPT,
         &HashMap::from([
             ("WORKSPACE_DIR", workspace_dir.as_str()),
+            ("USER_NAME", &config.appearance.user_name),
             ("OS_NAME", std::env::consts::OS),
             ("OS_SHELL_EXECUTABLE", &get_shell_path()),
             ("USER_HOME_DIR", dirs::home_dir().unwrap().to_str().unwrap()),
-            ("USER_INSTRUCTION", user_instructions),
+            ("USER_INSTRUCTION", &config.user_instructions),
         ]),
     )
     .unwrap()

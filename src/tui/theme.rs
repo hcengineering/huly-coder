@@ -1,179 +1,57 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
-use ratatui::style::{Color, Style, Stylize};
+
+use std::{path::Path, str::FromStr};
+
+use ansi_colours::AsRGB;
+use anyhow::Result;
+use ratatui::style::{Color, Style};
+use serde::Deserialize;
+use serde_yaml::{Mapping, Value};
 
 /// Theme for UI components
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 pub struct Theme {
-    /// Background color for the application
+    /// main background color
     pub background: Color,
-    /// Background color for odd rows
+    /// background color for selected items
     pub background_highlight: Color,
-    /// Text color for normal content
-    pub text: Color,
-    pub inactive_text: Color,
-    pub tool_call: Color,
-    /// Background color for toolbar panels
-    pub panel: Color,
-    pub panel_shadow: Color,
-    /// Focuse border color
-    pub focus: Color,
-    /// Primary accent color
-    pub primary: Color,
-    /// Secondary accent color
-    pub secondary: Color,
-    /// Color for highlighting active elements
-    pub highlight: Color,
-    /// Color for success messages/indicators
-    pub success: Color,
-    /// Color for warning messages/indicators
-    pub warning: Color,
-    /// Color for error messages/indicators
-    pub error: Color,
-    /// Color for inactive or disabled elements
-    pub inactive: Color,
-    /// Status bar background color
-    pub status: Color,
-    /// Border color for widgets
+    /// border colors of componends
     pub border: Color,
+    /// border color of focused component
+    pub focus: Color,
+
+    /// top panel color
+    pub panel: Color,
+    /// top panel shadow color
+    pub panel_shadow: Color,
+
+    /// base text color
+    pub text: Color,
+    /// text color for inactive content
+    pub inactive_text: Color,
+    /// color for highlighted text (shortcuts, titles, etc)
+    pub highlight_text: Color,
+    /// color for thinking blocks of model response
+    pub think_block: Color,
+
+    /// success message color
+    pub success: Color,
+    /// error message color and border color
+    pub error: Color,
+
+    /// assistant name color
     pub assistant: Color,
+    /// user name color
     pub user: Color,
 }
 
 impl Theme {
-    /// Create a new theme with custom colors
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        background: Color,
-        background_highlight: Color,
-        text: Color,
-        inactive_text: Color,
-        tool_call: Color,
-        panel: Color,
-        panel_shadow: Color,
-        primary: Color,
-        focus: Color,
-        secondary: Color,
-        highlight: Color,
-        success: Color,
-        warning: Color,
-        error: Color,
-        inactive: Color,
-        status: Color,
-        border: Color,
-        assistant: Color,
-        user: Color,
-    ) -> Self {
-        Self {
-            background,
-            background_highlight,
-            text,
-            inactive_text,
-            tool_call,
-            panel,
-            panel_shadow,
-            primary,
-            focus,
-            secondary,
-            highlight,
-            success,
-            warning,
-            error,
-            inactive,
-            status,
-            border,
-            assistant,
-            user,
-        }
-    }
-
-    /// Get the default dark theme
-    pub fn dark() -> Self {
-        Self {
-            background: Color::Black,
-            background_highlight: Color::Indexed(234),
-            panel: Color::Indexed(236),
-            panel_shadow: Color::Indexed(237),
-            text: Color::White,
-            inactive_text: Color::Gray,
-            tool_call: Color::Indexed(153),
-            focus: Color::Blue,
-            primary: Color::Indexed(188),
-            secondary: Color::Blue,
-            highlight: Color::Yellow,
-            success: Color::Green,
-            warning: Color::Yellow,
-            error: Color::Red,
-            inactive: Color::DarkGray,
-            status: Color::DarkGray,
-            border: Color::Indexed(241),
-            assistant: Color::Indexed(75),
-            user: Color::Indexed(113),
-        }
-    }
-
-    /// Get the default light theme
-    pub fn light() -> Self {
-        Self {
-            background: Color::White,
-            background_highlight: Color::from_u32(0xF0F0F0),
-            panel: Color::LightMagenta,
-            panel_shadow: Color::LightMagenta,
-            text: Color::Black,
-            inactive_text: Color::Black,
-            tool_call: Color::Black,
-            primary: Color::Blue,
-            focus: Color::Blue,
-            secondary: Color::Cyan,
-            highlight: Color::Magenta,
-            success: Color::Green,
-            warning: Color::Yellow,
-            error: Color::Red,
-            inactive: Color::Gray,
-            status: Color::Gray,
-            border: Color::DarkGray,
-            assistant: Color::from_u32(0x2196F3),
-            user: Color::from_u32(0x4CAF50),
-        }
-    }
-
-    pub fn panel_style(&self) -> Style {
-        Style::default().fg(self.text).bg(self.panel)
-    }
-
     pub fn text_style(&self) -> Style {
         Style::default().fg(self.text).bg(self.background)
     }
 
-    pub fn primary_style(&self) -> Style {
-        Style::default().fg(self.primary).bg(self.background).bold()
-    }
-
-    pub fn secondary_style(&self) -> Style {
-        Style::default().fg(self.secondary).bg(self.background)
-    }
-
-    pub fn highlight_style(&self) -> Style {
-        Style::default().fg(self.highlight)
-    }
-
-    pub fn success_style(&self) -> Style {
-        Style::default().fg(self.success)
-    }
-
-    pub fn warning_style(&self) -> Style {
-        Style::default().fg(self.warning)
-    }
-
     pub fn error_style(&self) -> Style {
         Style::default().fg(self.error)
-    }
-
-    pub fn inactive_style(&self) -> Style {
-        Style::default().fg(self.inactive)
-    }
-
-    pub fn inactive_text_style(&self) -> Style {
-        Style::default().fg(self.inactive_text)
     }
 
     pub fn border_style(&self, focused: bool) -> Style {
@@ -182,17 +60,51 @@ impl Theme {
             .bg(self.background)
     }
 
-    pub fn tool_call_style(&self) -> Style {
-        Style::default().fg(self.tool_call)
-    }
-
     pub fn tool_result_style(&self, is_sucess: bool) -> Style {
         Style::default().fg(if is_sucess { self.success } else { self.error })
     }
 }
 
-impl Default for Theme {
-    fn default() -> Self {
-        Self::dark()
+struct Rgb(u8, u8, u8);
+
+impl AsRGB for Rgb {
+    fn as_u32(&self) -> u32 {
+        (self.0 as u32) << 16 | (self.1 as u32) << 8 | self.2 as u32
+    }
+}
+
+impl Theme {
+    pub fn load(theme: impl AsRef<str>) -> Result<Self> {
+        let is_256colors = std::env::var("TERM").is_ok_and(|t| t.contains("256"));
+        let theme = theme.as_ref();
+        let theme_source = if theme == "dark" {
+            include_str!("../../themes/dark.yaml")
+        } else if theme == "light" {
+            include_str!("../../themes/light.yaml")
+        } else {
+            let path = Path::new(theme);
+            if path.exists() {
+                &std::fs::read_to_string(path)?
+            } else {
+                panic!("Theme file not found: {}", theme);
+            }
+        };
+        let mut theme_val: Mapping = serde_yaml::from_str(&theme_source)?;
+        if is_256colors {
+            for (_, v) in theme_val.iter_mut() {
+                if let Some(color) = v.as_str() {
+                    let color = Color::from_str(color)?;
+                    match color {
+                        Color::Rgb(r, g, b) => {
+                            let idx = ansi_colours::ansi256_from_rgb(Rgb(r, g, b));
+                            *v = serde_yaml::to_value(Color::Indexed(idx))?;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        let res_theme: Theme = serde_yaml::from_value(Value::Mapping(theme_val))?;
+        Ok(res_theme)
     }
 }

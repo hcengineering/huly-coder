@@ -34,7 +34,18 @@ model: anthropic/claude-3.5-sonnet
 #   provider:
 #     order: [ "openai", "together"]
 #     allow_fallbacks: false
-      
+
+#---------------------------------------
+# Appearance Configuration
+#---------------------------------------
+# Supported appearance themes:
+# - dark (default)
+# - light
+# - file path to yaml file
+# to develop a new theme, you can run `cargo r -- --autoreload-theme` for autoreload theme on change and specify the theme path in the config file
+appearance:
+  theme: dark
+  user_name: default_user
 
 #---------------------------------------
 # Permission mode

@@ -425,8 +425,7 @@ impl Agent {
             self.config.provider,
             self.config.model
         );
-        let system_prompt =
-            prepare_system_prompt(&self.config.workspace, &self.config.user_instructions).await;
+        let system_prompt = prepare_system_prompt(&self.config).await;
         let system_prompt_token_count = count_tokens(&system_prompt);
         let mut tools_tokens = 0;
 

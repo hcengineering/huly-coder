@@ -15,7 +15,7 @@ impl ToolbarWidget {
             .borders(Borders::BOTTOM)
             .border_type(BorderType::QuadrantOutside)
             .border_style(Style::default().fg(theme.background).bg(theme.panel_shadow))
-            .style(theme.panel_style())
+            .style(Style::default().bg(theme.panel))
             .padding(Padding::horizontal(1))
             .render(area, buf);
 
@@ -41,7 +41,7 @@ impl ToolbarWidget {
         let toolbar_text = Line::from(vec![
             Span::styled(
                 format!("{:?}", config.provider),
-                Style::default().fg(theme.highlight),
+                Style::default().fg(theme.assistant),
             ),
             Span::styled(" | ", Style::default().fg(theme.focus)),
             Span::styled(&config.model, Style::default().fg(theme.text)),

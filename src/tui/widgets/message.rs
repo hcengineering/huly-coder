@@ -61,7 +61,12 @@ fn format_text_wrapped<'a>(
     }
 }
 
-fn format_think_block<'a>(text: &str, ratskin: &ratskin::RatSkin, width: u16) -> Vec<Line<'a>> {
+fn format_think_block<'a>(
+    text: &str,
+    ratskin: &ratskin::RatSkin,
+    theme: &'a Theme,
+    width: u16,
+) -> Vec<Line<'a>> {
     let mut lines = vec![];
     lines.push(Line::styled(
         format!(" ╭{}", "─".repeat(width as usize - 4)),
@@ -70,7 +75,7 @@ fn format_think_block<'a>(text: &str, ratskin: &ratskin::RatSkin, width: u16) ->
     for mut part in ratskin.parse_text(text.trim(), width - 4) {
         part.spans.insert(
             0,
-            Span::styled(" │", Style::default().fg(Color::Indexed(60))),
+            Span::styled(" │", Style::default().fg(theme.think_block)),
         );
         lines.push(part);
     }
@@ -176,11 +181,13 @@ fn process_message<'a>(
                                 let mut line = role_prefix("Assistant", theme.assistant);
                                 line.spans.push(Span::styled(
                                     format!("THINKING {} ", &open_suffix),
-                                    theme.tool_call_style(),
+                                    Style::default().fg(theme.think_block),
                                 ));
                                 lines.push(line);
                                 if is_opened {
-                                    lines.append(&mut format_think_block(&text, &ratskin, width));
+                                    lines.append(&mut format_think_block(
+                                        &text, &ratskin, &theme, width,
+                                    ));
                                 }
                             } else {
                                 let mut line = role_prefix("Assistant", theme.assistant);
@@ -208,11 +215,13 @@ fn process_message<'a>(
                             }
                         } else if is_think_block {
                             if is_opened {
-                                lines.append(&mut format_think_block(&text, &ratskin, width));
+                                lines.append(&mut format_think_block(
+                                    &text, &ratskin, &theme, width,
+                                ));
                             } else {
                                 lines.push(Line::styled(
                                     format!("THINKING {} ", &open_suffix),
-                                    theme.tool_call_style(),
+                                    Style::default().fg(theme.think_block),
                                 ));
                             }
                         } else {

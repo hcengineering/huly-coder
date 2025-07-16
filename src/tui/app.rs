@@ -1,7 +1,8 @@
 // Copyright © 2025 Huly Labs. Use of this source code is governed by the MIT license.
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use std::{fs, vec};
 
 use crate::agent::event::{AgentCommandStatus, AgentState, ConfirmToolResponse};
@@ -105,6 +106,7 @@ pub struct App<'a> {
     pub theme: Theme,
     pub model: ModelState,
     pub ui: UiState<'a>,
+    pub autoreload_theme: bool,
 }
 
 impl UiState<'_> {
@@ -144,7 +146,9 @@ impl App<'_> {
         sender: mpsc::UnboundedSender<agent::AgentControlEvent>,
         receiver: mpsc::UnboundedReceiver<agent::AgentOutputEvent>,
         messages: Vec<Message>,
+        autoreload_theme: bool,
     ) -> Self {
+        let theme = Theme::load(&config.appearance.theme).unwrap();
         Self {
             ui: UiState::new(config.workspace.clone()),
             config,
@@ -152,8 +156,9 @@ impl App<'_> {
             running: true,
             events: UiEventMultiplexer::new(receiver),
             agent_sender: sender,
-            theme: Theme::default(),
+            theme,
             model: ModelState::new(messages, model_info),
+            autoreload_theme,
         }
     }
 
@@ -223,7 +228,20 @@ impl App<'_> {
         if !self.model.messages.is_empty() {
             self.ui.history_follow_last = true;
         }
+        let autoload_theme =
+            self.autoreload_theme && Path::new(&self.config.appearance.theme).exists();
+        let mut last_theme_modified = SystemTime::now();
         while self.running {
+            if autoload_theme {
+                let current_theme_modified =
+                    std::fs::metadata(&self.config.appearance.theme)?.modified()?;
+                if current_theme_modified != last_theme_modified {
+                    if let Ok(theme) = Theme::load(&self.config.appearance.theme) {
+                        self.theme = theme;
+                    }
+                    last_theme_modified = current_theme_modified;
+                }
+            }
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
 
             match self.events.next().await? {

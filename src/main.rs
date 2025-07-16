@@ -46,6 +46,9 @@ struct Args {
     /// Path to config file
     #[arg(short, long, default_value = "huly-coder-local.yaml")]
     config: String,
+    /// For theme development, auto reload theme file on changes
+    #[arg(long, default_value = "false")]
+    autoreload_theme: bool,
 }
 
 fn init_logger(data_dir: &str) {
@@ -161,6 +164,7 @@ async fn main() -> color_eyre::Result<()> {
         control_sender,
         output_receiver,
         history,
+        args.autoreload_theme,
     )
     .run(terminal)
     .await;

@@ -41,7 +41,7 @@ impl TaskInfoWidget {
             .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
             .title(" Current Task ")
             .title_alignment(Alignment::Right)
-            .title_style(theme.primary_style())
+            .title_style(theme.text_style())
             .padding(Padding::horizontal(1))
             .border_type(BorderType::Rounded)
             .border_style(theme.border_style(false))

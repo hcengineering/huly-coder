@@ -65,7 +65,7 @@ impl TerminalWidget {
             .title(" Terminal ")
             .title_top(title)
             .title_alignment(Alignment::Right)
-            .title_style(theme.primary_style())
+            .title_style(theme.text_style())
             .border_type(BorderType::Rounded)
             .border_style(theme.border_style(is_focused));
 
@@ -73,12 +73,15 @@ impl TerminalWidget {
         if let Some(state) = model_state.get(ui_state.selected_idx) {
             terminal_lines.push(Line::styled(
                 format!("> {}", state.command.clone().unwrap_or_default()),
-                theme.primary_style(),
+                theme.text_style(),
             ));
             if !state.output.is_empty() {
                 let output = state.output.replace("\\n", "\n");
                 output.lines().for_each(|line| {
-                    terminal_lines.push(Line::styled(line.to_string(), theme.inactive_text_style()))
+                    terminal_lines.push(Line::styled(
+                        line.to_string(),
+                        Style::default().fg(theme.inactive_text),
+                    ))
                 });
             }
         }

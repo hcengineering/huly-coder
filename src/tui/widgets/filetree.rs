@@ -21,7 +21,6 @@ pub struct FileTreeState {
     pub tree_state: TreeState<String>,
     pub focused: bool,
     pub highlighted: bool,
-    pub theme: Theme,
 }
 
 #[derive(Debug)]
@@ -56,7 +55,6 @@ impl FileTreeState {
             tree_state: TreeState::default(),
             focused: false,
             highlighted: false,
-            theme: Theme::default(),
         }
     }
 
@@ -133,10 +131,8 @@ impl FileTreeState {
 #[derive(Debug)]
 pub struct FileTreeWidget;
 
-impl StatefulWidget for FileTreeWidget {
-    type State = FileTreeState;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+impl FileTreeWidget {
+    pub fn render(self, area: Rect, buf: &mut Buffer, state: &mut FileTreeState, theme: &Theme) {
         if state.items.is_empty() {
             state.update_items();
         }
@@ -144,9 +140,9 @@ impl StatefulWidget for FileTreeWidget {
             .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT)
             .title(" Workspace ")
             .title_alignment(Alignment::Right)
-            .title_style(state.theme.primary_style())
+            .title_style(theme.text_style())
             .border_type(BorderType::Rounded)
-            .border_style(state.theme.border_style(state.focused));
+            .border_style(theme.border_style(state.focused));
 
         let widget = Tree::new(&state.items)
             .expect("all item identifiers are unique")
@@ -159,9 +155,9 @@ impl StatefulWidget for FileTreeWidget {
                     .thumb_symbol("▐"),
             ))
             .highlight_style(if state.highlighted {
-                Style::new().bg(state.theme.focus)
+                Style::new().bg(theme.focus)
             } else {
-                Style::new().bg(state.theme.border)
+                Style::new().bg(theme.border)
             });
         StatefulWidget::render(widget, area, buf, &mut state.tree_state);
     }

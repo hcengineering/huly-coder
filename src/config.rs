@@ -82,6 +82,16 @@ pub enum PermissionMode {
     DenyAll,
 }
 
+fn default_user() -> String {
+    "default_user".to_string()
+}
+#[derive(Debug, Deserialize, Clone)]
+pub struct Appearance {
+    pub theme: String,
+    #[serde(default = "default_user")]
+    pub user_name: String,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub provider: ProviderKind,
@@ -89,6 +99,7 @@ pub struct Config {
     pub provider_base_url: Option<String>,
     pub provider_config: Option<serde_json::Value>,
     pub model: String,
+    pub appearance: Appearance,
     pub permission_mode: PermissionMode,
     pub workspace: PathBuf,
     pub user_instructions: String,

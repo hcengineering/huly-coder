@@ -1,0 +1,32 @@
+# main background color
+background: "#FAFAFA"
+# background color for selected items
+background_highlight: "#E6E6E6"
+# border colors of componends
+border: "#E0E1E2"
+# border color of focused component
+focus: "#4078F2"
+
+# top panel color
+panel: "#FAFAFA"
+# top panel shadow color
+panel_shadow: "#E0E1E2"
+
+# base text color
+text: "#383A42"
+# text color for inactive content
+inactive_text: "#818181"
+# color for highlighted text (shortcuts, titles, etc)
+highlight_text: "#C18401"
+# color for thinking blocks of model response
+think_block: "#0184BC"
+
+# success message color
+success: "#50A14F"
+# error message color and border color
+error: "#CA1143"
+
+# assistant name color
+assistant: "#526EFF"
+# user name color
+user: "#50A14F"
