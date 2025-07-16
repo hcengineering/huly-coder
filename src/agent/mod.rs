@@ -19,7 +19,7 @@ use crate::tools::execute_command::tools::TerminateCommandTool;
 use crate::tools::execute_command::ProcessRegistry;
 use crate::tools::list_files::ListFilesTool;
 use crate::tools::memory;
-use crate::tools::memory::Entity;
+use crate::tools::memory::indexer::MemoryIndexer;
 use crate::tools::memory::MemoryManager;
 use crate::tools::read_file::ReadFileTool;
 use crate::tools::replace_in_file::ReplaceInFileTool;
@@ -40,7 +40,6 @@ use rig::agent::AgentBuilder;
 use rig::completion::CompletionError;
 use rig::completion::CompletionModel;
 use rig::completion::CompletionResponse;
-use rig::embeddings::EmbeddingsBuilder;
 use rig::message::AssistantContent;
 use rig::message::ImageMediaType;
 use rig::message::Message;
@@ -50,8 +49,6 @@ use rig::message::UserContent;
 use rig::tool::Tool;
 use rig::tool::ToolError;
 use rig::tool::ToolSetError;
-use rig::vector_store::in_memory_store::InMemoryVectorIndex;
-use rig::vector_store::in_memory_store::InMemoryVectorStore;
 use rig::OneOrMany;
 use serde::Deserialize;
 use serde::Serialize;
@@ -138,7 +135,7 @@ struct AgentContext {
     state: Arc<RwLock<AgentState>>,
     sender: mpsc::UnboundedSender<AgentOutputEvent>,
     process_registry: Arc<RwLock<ProcessRegistry>>,
-    memory_index: Arc<RwLock<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>>>,
+    memory_index: Arc<RwLock<MemoryIndexer>>,
     system_prompt_token_count: u32,
     current_input_tokens: u32,
     current_completion_tokens: u32,
@@ -146,31 +143,17 @@ struct AgentContext {
 
 impl Agent {
     pub fn new(
-        data_dir: &str,
+        _data_dir: &str,
         config: Config,
+        memory: Arc<RwLock<MemoryManager>>,
         sender: mpsc::UnboundedSender<AgentOutputEvent>,
     ) -> Self {
         Self {
             config,
             sender,
-            memory: Arc::new(RwLock::new(MemoryManager::new(data_dir, false))),
+            memory,
             process_registry: Arc::new(RwLock::new(ProcessRegistry::default())),
         }
-    }
-
-    pub async fn init_memory_index(
-        &mut self,
-    ) -> InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity> {
-        let documents = self.memory.read().await.entities().clone();
-        let client = rig_fastembed::Client::new();
-        let model = client.embedding_model(&rig_fastembed::FastembedModel::AllMiniLML6V2);
-        let embeddings = EmbeddingsBuilder::new(model.clone())
-            .documents(documents)
-            .unwrap()
-            .build()
-            .await
-            .unwrap();
-        InMemoryVectorStore::from_documents(embeddings.into_iter()).index(model)
     }
 
     fn add_static_tools<M>(
@@ -418,7 +401,7 @@ impl Agent {
         data_dir: &str,
         receiver: mpsc::UnboundedReceiver<AgentControlEvent>,
         messages: Vec<Message>,
-        memory_index: InMemoryVectorIndex<rig_fastembed::EmbeddingModel, Entity>,
+        memory_index: Arc<RwLock<MemoryIndexer>>,
     ) {
         tracing::info!(
             "Run agent: {:?} : {}",
@@ -468,7 +451,6 @@ impl Agent {
             .unwrap();
 
         let messages = Arc::new(RwLock::new(messages));
-        let memory_index = Arc::new(RwLock::new(memory_index));
         let sender = self.sender.clone();
         let state = Arc::new(RwLock::new(state));
         let config_state = Arc::new(RwLock::new(AgentConfigState::new(data_dir)));

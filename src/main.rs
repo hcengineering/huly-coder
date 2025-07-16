@@ -5,6 +5,7 @@ use std::io::stdout;
 use std::panic::set_hook;
 use std::panic::take_hook;
 use std::path::Path;
+use std::sync::Arc;
 
 use crossterm::execute;
 use crossterm::terminal::disable_raw_mode;
@@ -15,6 +16,7 @@ use providers::model_info::model_info;
 use ratatui::prelude::CrosstermBackend;
 use ratatui::DefaultTerminal;
 use ratatui::Terminal;
+use tokio::sync::RwLock;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::Layer;
@@ -22,6 +24,8 @@ use tracing_subscriber::Layer;
 use self::config::Config;
 use crate::agent::AgentControlEvent;
 use crate::agent::AgentOutputEvent;
+use crate::tools::memory::indexer::MemoryIndexer;
+use crate::tools::memory::MemoryManager;
 use clap::Parser;
 
 mod agent;
@@ -145,8 +149,14 @@ async fn main() -> color_eyre::Result<()> {
     let model_info = model_info(&args.data, &config).await?;
     tracing::info!("Model info: {:?}", model_info);
 
-    let mut agent = agent::Agent::new(&args.data, config.clone(), output_sender);
-    let memory_index = agent.init_memory_index().await;
+    let memory_index = Arc::new(RwLock::new(MemoryIndexer::new(data_dir, &config)));
+    let memory = Arc::new(RwLock::new(MemoryManager::new(
+        &args.data,
+        memory_index.clone(),
+        false,
+    )));
+    let mut agent = agent::Agent::new(&args.data, config.clone(), memory.clone(), output_sender);
+    memory_index.write().await.init(memory.clone()).await?;
 
     let messages = history.clone();
     let data_dir = args.data.clone();

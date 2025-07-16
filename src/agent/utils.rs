@@ -6,14 +6,12 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use rig::message::{Message, UserContent};
-use rig::vector_store::in_memory_store::InMemoryVectorIndex;
-use rig::vector_store::VectorStoreIndex;
 use tokio::sync::RwLock;
 
 use crate::config::Config;
 use crate::templates::{ENV_DETAILS, SYSTEM_PROMPT};
 use crate::tools::execute_command::ProcessRegistry;
-use crate::tools::memory::{self, Entity};
+use crate::tools::memory::indexer::MemoryIndexer;
 use crate::HISTORY_PATH;
 
 pub const MAX_FILES: usize = 10000;
@@ -51,9 +49,7 @@ pub async fn prepare_system_prompt(config: &Config) -> String {
 
 pub async fn add_env_message<'a>(
     msg: &'a mut Message,
-    memory_index: Arc<
-        tokio::sync::RwLock<InMemoryVectorIndex<rig_fastembed::EmbeddingModel, memory::Entity>>,
-    >,
+    memory_index: Arc<RwLock<MemoryIndexer>>,
     data_dir: &'a Path,
     workspace: &'a Path,
     process_registry: Arc<RwLock<ProcessRegistry>>,
@@ -98,8 +94,7 @@ pub async fn add_env_message<'a>(
             _ => "",
         };
         if !txt.is_empty() {
-            let res: Vec<(f64, String, Entity)> = memory_index.top_n(txt, 10).await.unwrap();
-            let result: Vec<_> = res.into_iter().map(|(_, _, entity)| entity).collect();
+            let result = memory_index.search(txt, 10).await.unwrap();
             memory_entries = serde_yaml::to_string(&result).unwrap();
         }
 

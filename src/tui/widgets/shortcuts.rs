@@ -43,7 +43,7 @@ impl ShortcutsWidget {
                             format!(": {description}"),
                             Style::default().fg(theme.inactive_text),
                         ),
-                        Span::styled(format!(" | "), Style::default().fg(theme.text)),
+                        Span::styled(" | ".to_string(), Style::default().fg(theme.text)),
                     ]
                 })
                 .collect::<Vec<_>>(),

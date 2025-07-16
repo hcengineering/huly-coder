@@ -93,6 +93,17 @@ pub struct Appearance {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum EmbeddingProvider {
+    VoyageAi {
+        api_key: String,
+        model: String,
+        dimensions: usize,
+    },
+    Fastembed,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub provider: ProviderKind,
     pub provider_api_key: Option<String>,
@@ -106,6 +117,7 @@ pub struct Config {
     pub mcp: Option<McpConfig>,
     pub web_search: Option<WebSearchProvider>,
     pub web_fetch: Option<WebFetchProvider>,
+    pub memory_embedding: EmbeddingProvider,
 }
 
 impl Config {

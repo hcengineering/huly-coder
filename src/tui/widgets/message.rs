@@ -186,7 +186,7 @@ fn process_message<'a>(
                                 lines.push(line);
                                 if is_opened {
                                     lines.append(&mut format_think_block(
-                                        &text, &ratskin, &theme, width,
+                                        &text, &ratskin, theme, width,
                                     ));
                                 }
                             } else {
@@ -215,9 +215,8 @@ fn process_message<'a>(
                             }
                         } else if is_think_block {
                             if is_opened {
-                                lines.append(&mut format_think_block(
-                                    &text, &ratskin, &theme, width,
-                                ));
+                                lines
+                                    .append(&mut format_think_block(&text, &ratskin, theme, width));
                             } else {
                                 lines.push(Line::styled(
                                     format!("THINKING {} ", &open_suffix),

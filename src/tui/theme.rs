@@ -89,17 +89,14 @@ impl Theme {
                 panic!("Theme file not found: {}", theme);
             }
         };
-        let mut theme_val: Mapping = serde_yaml::from_str(&theme_source)?;
+        let mut theme_val: Mapping = serde_yaml::from_str(theme_source)?;
         if is_256colors {
             for (_, v) in theme_val.iter_mut() {
                 if let Some(color) = v.as_str() {
                     let color = Color::from_str(color)?;
-                    match color {
-                        Color::Rgb(r, g, b) => {
-                            let idx = ansi_colours::ansi256_from_rgb(Rgb(r, g, b));
-                            *v = serde_yaml::to_value(Color::Indexed(idx))?;
-                        }
-                        _ => {}
+                    if let Color::Rgb(r, g, b) = color {
+                        let idx = ansi_colours::ansi256_from_rgb(Rgb(r, g, b));
+                        *v = serde_yaml::to_value(Color::Indexed(idx))?;
                     }
                 }
             }

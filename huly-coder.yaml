@@ -62,6 +62,19 @@ permission_mode: manual_approval
 workspace: ./target/workspace
 
 #---------------------------------------
+# Memory Embedding Configuration
+#---------------------------------------
+# Supported embedding providers:
+# - fastembed (default)
+# - voyage_ai
+#     type: voyage_ai
+#     api_key: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+#     model: voyage-3.5-lite
+#     dimensions: 256
+memory_embedding:
+  type: fastembed
+
+#---------------------------------------
 # Web Interaction Configuration
 #---------------------------------------
 # Web Fetch Options:

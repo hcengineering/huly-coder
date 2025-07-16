@@ -7,17 +7,20 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use anyhow::Result;
 use indicium::simple::{Indexable, SearchIndex};
 use rig::agent::AgentBuilder;
 use rig::completion::{CompletionModel, ToolDefinition};
 use rig::tool::Tool;
-use rig::Embed;
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
+
+use crate::tools::memory::indexer::MemoryIndexer;
 
 use super::AgentToolError;
 
-#[cfg(test)]
-mod tests;
+pub mod indexer;
+mod voyageai_embedding;
 
 const TOOLS_STR: &str = include_str!("tools.json");
 const MEMORY_PATH: &str = "memory.yaml";
@@ -64,7 +67,7 @@ macro_rules! create_tool {
                 }
 
                 async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-                    self.manager.write().await.call_tool(&self.name(), args)
+                    self.manager.write().await.call_tool(&self.name(), args).await
                 }
 
                 fn name(&self) -> String {
@@ -90,7 +93,7 @@ struct AddObservationsResult {
     added_observations: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Entity {
     pub name: String,
     #[serde(rename = "entityType")]
@@ -116,20 +119,8 @@ pub struct MemoryManager {
     memory_only: bool,
     knowledge_graph: KnowledgeGraph,
     search_index: SearchIndex<usize>,
+    memory_indexer: Arc<RwLock<MemoryIndexer>>,
     data_dir: PathBuf,
-}
-
-impl Embed for Entity {
-    fn embed(
-        &self,
-        embedder: &mut rig::embeddings::TextEmbedder,
-    ) -> Result<(), rig::embeddings::EmbedError> {
-        embedder.embed(self.name.clone());
-        self.observations
-            .iter()
-            .for_each(|t| embedder.embed(t.clone()));
-        Ok(())
-    }
 }
 
 impl Indexable for Entity {
@@ -141,7 +132,11 @@ impl Indexable for Entity {
 }
 
 impl MemoryManager {
-    pub fn new(data_dir: &str, memory_only: bool) -> Self {
+    pub fn new(
+        data_dir: &str,
+        memory_indexer: Arc<RwLock<MemoryIndexer>>,
+        memory_only: bool,
+    ) -> Self {
         let knowledge_graph = if !memory_only {
             serde_yaml::from_str(
                 &fs::read_to_string(Path::new(data_dir).join(MEMORY_PATH)).unwrap_or_default(),
@@ -170,6 +165,7 @@ impl MemoryManager {
             memory_only,
             knowledge_graph,
             search_index,
+            memory_indexer,
             data_dir: PathBuf::from(data_dir),
         }
     }
@@ -178,7 +174,11 @@ impl MemoryManager {
         &self.knowledge_graph.entities
     }
 
-    pub fn call_tool(
+    pub async fn update_embeddings(&self, entities: Vec<Entity>) -> Result<()> {
+        self.memory_indexer.write().await.index(entities).await
+    }
+
+    pub async fn call_tool(
         &mut self,
         toolname: &str,
         args: serde_json::Value,
@@ -195,6 +195,7 @@ impl MemoryManager {
                 });
                 self.knowledge_graph.entities.extend(entities.clone());
                 self.save();
+                self.update_embeddings(entities.clone()).await?;
                 Ok(serde_json::to_string_pretty(&entities)?)
             }
             "create_relations" => {
@@ -239,6 +240,14 @@ impl MemoryManager {
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 self.save();
+                self.update_embeddings(
+                    self.entities()
+                        .iter()
+                        .filter(|e| result.iter().any(|r| r.entity_name == e.name))
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                )
+                .await?;
                 Ok(serde_json::to_string_pretty(&result)?)
             }
             "delete_entities" => {
