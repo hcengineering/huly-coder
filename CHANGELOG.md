@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.3.2...huly-coder-v0.4.0) (2025-07-16)
+
+
+### Features
+
+* additional configuration for model providers ([699161b](https://github.com/hcengineering/huly-coder/commit/699161be4ac9f7ba8b602a4a035752fd8ec771a8))
+* **agent:** Add user appearance (User Name) ([4f28514](https://github.com/hcengineering/huly-coder/commit/4f28514d27ffb8dfb414b28ed108973c7b222b8b))
+* export history to markdown ([bcc1b90](https://github.com/hcengineering/huly-coder/commit/bcc1b90aef3043affe805a0ad93bd7daf2aa07ea))
+* **memory:** Add VoyageAI embedding support for memory ([193b299](https://github.com/hcengineering/huly-coder/commit/193b29969ae9b66e3b9d5596b919a979aaf75883))
+* store env context in data/env.txt file ([54fd6e7](https://github.com/hcengineering/huly-coder/commit/54fd6e7f5660cf8a698d56a2abe8835127d7fae6))
+* **tui:** Improve theme support, add light theme ([4f28514](https://github.com/hcengineering/huly-coder/commit/4f28514d27ffb8dfb414b28ed108973c7b222b8b))
+
+
+### Bug Fixes
+
+* on tool deny allow user correct promt ([715cc8d](https://github.com/hcengineering/huly-coder/commit/715cc8d0adf95af1b5c581085af08cc9405a8c2c))
+* **tui:** incorrect scroll to the latest message in history view ([cfcddd6](https://github.com/hcengineering/huly-coder/commit/cfcddd6c57e9f79022f2bf381cbdcfdc1df2bb03))
+* **tui:** incorrect scroll to the latest message in history view ([7d5452e](https://github.com/hcengineering/huly-coder/commit/7d5452e3788927988a7f38a4dda1f409ca9cdc4e))
+* update rig-fastembed module to the latest version ([1b5a91a](https://github.com/hcengineering/huly-coder/commit/1b5a91a8ee6ecd3046c89dae8f130c587b1b9d74))
+
 ## [0.3.2](https://github.com/hcengineering/huly-coder/compare/huly-coder-v0.3.1...huly-coder-v0.3.2) (2025-07-14)
 
 
